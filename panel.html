@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Panel</title>
+  <!-- External CSS and Supabase JS -->
+  <link rel="stylesheet" href="/css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <h2>Admin Panel</h2>
+      <nav>
+        <ul>
+          <li><a href="#" id="subscriptions-link">Subscriptions</a></li>
+          <li><a href="#" id="accounts-link">Accounts</a></li>
+        </ul>
+      </nav>
+    </aside>
+    <!-- MAIN CONTENT -->
+    <main class="content">
+      <!-- SUBSCRIPTIONS PAGE -->
+      <div id="subscriptions-page" class="page active">
+        <div class="panel-container">
+          <h1>Subscriptions</h1>
+          <div id="spinner" class="spinner"></div>
+          <div id="message-box" class="message-box"></div>
+          <!-- Form to add a new subscription -->
+          <form id="admin-form">
+            <input type="text" id="phone" placeholder="Phone Number" required />
+            <input type="text" id="username" placeholder="Username (Anghami only)" />
+            <select id="service">
+              <option value="Netflix" selected>Netflix</option>
+              <option value="Anghami">Anghami</option>
+              <option value="chatGPT">chatGPT</option>
+            </select>
+            <select id="duration">
+              <option value="1">1 Month</option>
+              <option value="3">3 Months</option>
+              <option value="6">6 Months</option>
+              <option value="12">12 Months</option>
+            </select>
+            <select id="paid">
+              <option value="true">Paid</option>
+              <option value="false" selected>Not Paid</option>
+            </select>
+            <button type="submit" id="submit-btn">Submit</button>
+          </form>
+          <button id="logout" class="logout">Logout</button>
+        </div>
+
+        <div id="reactivate-panel">
+          <h3>Reactivate GPT Code</h3>
+          <input type="text" id="reactivate-phone" placeholder="Enter phone" />
+          <button id="reactivate-search-btn">Search</button>
+          <select id="reactivate-sub-select" style="display:none"></select>
+          <button id="reactivate-btn" style="display:none">Reactivate</button>
+          <div id="reactivate-msg"></div>
+        </div>
+        
+
+        <button id="trigger-renewals-btn" hidden>Trigger Renewal Payments</button> 
+
+        <!-- Subscriptions Table and Filter -->
+        <h2 class="section-title">View:</h2>
+        <div class="select-container">
+          <select id="view-selector">
+            <option value="pendingpayments" selected>Pending Payments</option>
+            <option value="pendingrenewals">Unpaid Renewals</option>
+            <option value="subscriptions">All Subscriptions</option>
+          </select>
+        </div>
+        <h2 class="section-title" id="subscription-table-title">Pending Payments</h2>
+        <div class="table-container">
+          <table id="subscription-table">
+            <thead>
+              <tr>
+                <th>Phone <button class="sort-btn" data-column="0">↕️</button></th>
+                <th>Email <button class="sort-btn" data-column="1">↕️</button></th>
+                <th>Amount <button class="sort-btn" data-column="2">↕️</button></th>
+                <th>Subscription <button class="sort-btn" data-column="3">↕️</button></th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ACCOUNTS & ISSUES PAGE -->
+      <div id="accounts-page" class="page">
+        <h1>Accounts & Issues</h1>
+        <div class="panel-container">
+          <div id="spinner-accs" class="spinner"></div>
+          <div id="message-box-accs" class="message-box"></div>
+          <form id="add-acc-form">
+            <select id="acc-service">
+              <option value="Netflix" selected>Netflix</option>
+              <option value="Anghami">Anghami</option>
+              <option value="chatGPT">chatGPT</option>
+            </select>
+          
+            <input type="text" id="acc-email" placeholder="Account Email" required />
+            <input type="text" id="acc-pass" placeholder="Account Password" required />
+          
+            <div id="anghami-links" style="display:none;">
+              <input type="text" id="link1" placeholder="Link 1" />
+              <input type="text" id="link2" placeholder="Link 2" />
+              <input type="text" id="link3" placeholder="Link 3" />
+              <input type="text" id="link4" placeholder="Link 4" />
+              <input type="text" id="link5" placeholder="Link 5" />
+            </div>
+          
+            <button type="submit" id="add-acc-btn">Add Account</button>
+          </form>
+        </div>
+
+        <h2 class="section-title">View:</h2>
+        <div class="select-container">
+          <select id="accounts-view-selector">
+            <option value="fetchissues">All Issues</option>
+            <option value="fetchunfixed">Unsolved Issues</option>
+            <option value="accs" selected>All Accounts</option>
+          </select>
+        </div>
+        <h2 class="section-title" id="accounts-issues-title">All Accounts</h2>
+        <div class="table-container">
+          <table id="accounts-issues-table">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="cancel-modal">
+    <div id="modal-content"></div>
+  </div>
+  
+  <!-- External JS scripts -->
+  <script src="/js/config.js"></script>
+  <script src="/js/subscriptions.js"></script>
+  <script src="/js/accounts.js"></script>
+  <script src="/js/main.js"></script>
+  
+</body>
+</html>
