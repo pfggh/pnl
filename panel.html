@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin Panel</title>
   <!-- External CSS and Supabase JS -->
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="/css/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -20,15 +20,44 @@
         </ul>
       </nav>
     </aside>
+
     <!-- MAIN CONTENT -->
     <main class="content">
       <!-- SUBSCRIPTIONS PAGE -->
       <div id="subscriptions-page" class="page active">
         <div class="panel-container">
-          <h1>Subscriptions</h1>
+          <!-- Clean header with title only -->
+          <div class="subs-header">
+            <h1>Subscriptions</h1>
+          </div>
+
+          <div id="kpi-bar">
+            <div class="kpi-card">
+              <span class="kpi-label">angh rdy:</span>
+              <span class="kpi-value" id="kpi-anghami">—</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">gpt rdy:</span>
+              <span class="kpi-value" id="kpi-chatgpt">—</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label"> nf renew: </span>
+              <span class="kpi-value" id="kpi-renewals">—</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">pnding pay:</span>
+              <span class="kpi-value" id="kpi-unpaid">—</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Orders 24h:</span>
+              <span class="kpi-value" id="kpi-orders">—</span>
+            </div>
+          </div>
+
           <div id="spinner" class="spinner"></div>
           <div id="message-box" class="message-box"></div>
-          <!-- Form to add a new subscription -->
+
+          <!-- Add subscription -->
           <form id="admin-form">
             <input type="text" id="phone" placeholder="Phone Number" required />
             <input type="text" id="username" placeholder="Username (Anghami only)" />
@@ -48,11 +77,22 @@
               <option value="false" selected>Not Paid</option>
             </select>
             <button type="submit" id="submit-btn">Submit</button>
-          </form>
-          <button id="logout" class="logout">Logout</button>
+
+                      <!-- Actions row (replaces Logout) -->
+          <div class="actions-row">
+            <button id="open-reactivate-modal" class="pill-btn">Reactivate GPT</button>
+            <button id="open-replace-modal"  class="pill-btn">Replace Netflix</button>
+            <button id="trigger-renewals-btn" class="pill-btn">Trigger Renewals</button>
+            <button id="trigger-msg"          class="pill-btn">Trigger Message</button>
+          </div>
         </div>
 
-        <div id="reactivate-panel">
+          </form>
+
+
+        
+        <!-- Hidden modal templates (Reactivate GPT + Replace Netflix) -->
+        <div id="reactivate-modal-template" style="display:none">
           <h3>Reactivate GPT Code</h3>
           <input type="text" id="reactivate-phone" placeholder="Enter phone" />
           <button id="reactivate-search-btn">Search</button>
@@ -60,9 +100,15 @@
           <button id="reactivate-btn" style="display:none">Reactivate</button>
           <div id="reactivate-msg"></div>
         </div>
-        
 
-        <button id="trigger-renewals-btn" hidden>Trigger Renewal Payments</button> 
+        <div id="replace-modal-template" style="display:none">
+          <h3>Replace Netflix Account</h3>
+          <input type="text" id="replace-email" placeholder="Account email to replace" />
+          <button id="replace-btn">Replace</button>
+          <small style="opacity:.8;display:block;margin-top:6px">
+            This will replace all active subs using this email. Expired subs get removed.
+          </small>
+        </div>
 
         <!-- Subscriptions Table and Filter -->
         <h2 class="section-title">View:</h2>
@@ -85,7 +131,6 @@
                 <th>Action</th>
               </tr>
             </thead>
-            
             <tbody></tbody>
           </table>
         </div>
@@ -103,10 +148,8 @@
               <option value="Anghami">Anghami</option>
               <option value="chatGPT">chatGPT</option>
             </select>
-          
             <input type="text" id="acc-email" placeholder="Account Email" required />
             <input type="text" id="acc-pass" placeholder="Account Password" required />
-          
             <div id="anghami-links" style="display:none;">
               <input type="text" id="link1" placeholder="Link 1" />
               <input type="text" id="link2" placeholder="Link 2" />
@@ -114,7 +157,6 @@
               <input type="text" id="link4" placeholder="Link 4" />
               <input type="text" id="link5" placeholder="Link 5" />
             </div>
-          
             <button type="submit" id="add-acc-btn">Add Account</button>
           </form>
         </div>
@@ -141,12 +183,11 @@
   <div id="cancel-modal">
     <div id="modal-content"></div>
   </div>
-  
+
   <!-- External JS scripts -->
-  <script src="js/config.js"></script>
-  <script src="js/subscriptions.js"></script>
-  <script src="js/accounts.js"></script>
-  <script src="js/main.js"></script>
-  
+  <script src="/js/config.js"></script>
+  <script src="/js/subscriptions.js"></script>
+  <script src="/js/accounts.js"></script>
+  <script src="/js/main.js"></script>
 </body>
 </html>
