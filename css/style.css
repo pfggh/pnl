@@ -94,15 +94,40 @@ h1, h2 {
   font-weight: 500;
 }
 
-/* Form elements */
-input, select, button {
+/* Inputs and selects stay full-width, but match sizing. */
+input {
   width: 100%;
   padding: 10px;
   margin-bottom: 15px;
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 16px;
+  box-sizing: border-box;
 }
+
+select {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 16px;
+  box-sizing: border-box;
+  height: 42px; /* Match input height (input: 10px top+bottom padding + 16px font + 2px border) */
+}
+
+button {
+  width: auto;
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+/* Keep only these two as full-width */
+#submit-btn, .logout { width: 100%; }
+
 button {
   background: #28a745;
   color: #fff;
@@ -187,12 +212,14 @@ tbody tr:nth-child(even) {
 /* Message box */
 .message-box {
   display: none;
-  margin: 20px auto;
-  padding: 10px;
+  margin: 12px auto;
+  padding: 6px 12px;
   max-width: 700px;
   border-radius: 4px;
   font-weight: bold;
   text-align: center;
+  line-height: 1.3;
+  font-size: 1rem;
 }
 .message-box.success {
   background-color: #d4edda;
@@ -274,3 +301,207 @@ tbody tr:nth-child(even) {
 .modal-x-btn:hover {
   color: #000;
 }
+
+
+/* Replacement list styling */
+.replace-list { display: grid; gap: 10px; }
+.replace-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--card, #101317);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.replace-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.replace-actions button { min-width: 110px; }
+
+/* ==== Subscriptions Panel Reflow ==== */
+
+/* Reflow the top of the subscriptions panel */
+#subscriptions-page .panel-container{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Order: KPI first, then header+actions, then everything else */
+#kpi-bar { order: 0; }
+.subs-header { order: 1; }
+#spinner     { order: 2; }
+#message-box { order: 3; }
+#admin-form  { order: 4; }
+.logout      { order: 5; }
+
+/* Header row with right-aligned compact actions */
+.subs-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  margin: 0;                 /* remove extra space above */
+}
+.subs-header h1{ margin:0; }
+
+/* Compact pill buttons beside the title */
+.subs-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.subs-actions button,
+#open-reactivate-modal,
+#open-replace-modal,
+#trigger-renewals-btn,
+#trigger-msg{
+  width:auto;                /* override global */
+  padding:6px 12px;
+  border-radius:9999px;
+  font-size:12px;
+  line-height:1;
+  border:1px solid #dfe3e8;
+  background:#f7f7f7;
+  color:#333;
+  margin-bottom:0;           /* keep row tight */
+  cursor:pointer;
+  transition:transform .06s ease, filter .15s ease, border-color .15s ease;
+}
+.subs-actions button:hover,
+#open-reactivate-modal:hover,
+#open-replace-modal:hover,
+#trigger-renewals-btn:hover,
+#trigger-msg:hover{
+  filter:brightness(1.05);
+  border-color:#c9cfd6;
+}
+.subs-actions button:active,
+#open-reactivate-modal:active,
+#open-replace-modal:active,
+#trigger-renewals-btn:active,
+#trigger-msg:active{
+  transform:translateY(1px);
+}
+
+/* KPI above header, centered on mobile, left on desktop */
+#kpi-bar{
+  order:0;
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin: 0;                 /* remove extra gap */
+  justify-content:center;
+}
+@media (min-width: 900px){
+  #kpi-bar{ justify-content:center; }
+}
+
+/* Smaller KPI pills so the row is denser */
+#kpi-bar .kpi-card{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding:4px 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  font-size:12px;
+  line-height: 1.2;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+#kpi-bar .kpi-card .kpi-value{
+  font-weight: 700;
+  color: #111827;
+  font-size:13px;
+}
+
+/* Wider panel on desktop so title + actions fit on one line */
+@media (min-width: 900px){
+  #subscriptions-page .panel-container{ max-width: 920px; }
+}
+
+/* Stack neatly on phones */
+@media (max-width: 640px){
+  .subs-header{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:10px;
+  }
+  .subs-actions{
+    width:100%;
+    gap:6px;
+  }
+  /* Make action buttons wrap 2 per row on small screens */
+  .subs-actions button,
+  #open-reactivate-modal,
+  #open-replace-modal,
+  #trigger-renewals-btn,
+  #trigger-msg{
+    flex:1 1 calc(50% - 6px);
+    text-align:center;
+  }
+}
+
+/* Actions row that replaces Logout */
+.actions-row{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content: center;
+  margin-top:6px;
+}
+
+/* Compact pill buttons */
+.pill-btn{
+  width:auto;               /* do not stretch */
+  padding:6px 12px;
+  margin-bottom:0;
+  border-radius:9999px;
+  border:1px solid #dfe3e8;
+  background:#f7f7f7;
+  color:#333;
+  font-size:12px;
+  line-height:1;
+  cursor:pointer;
+  transition:transform .06s ease, filter .15s ease, border-color .15s ease;
+}
+.pill-btn:hover{ filter:brightness(1.05); border-color:#c9cfd6; }
+.pill-btn:active{ transform:translateY(1px); }
+
+/* Keep KPI above, title + actions tight */
+.subs-header{ display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.subs-header h1{ margin:0; }
+
+/* Responsive */
+@media (min-width: 900px){
+  #subscriptions-page .panel-container{ max-width: 920px; }
+}
+@media (max-width: 640px){
+  .actions-row{ width:100%; }
+  .pill-btn{ flex:1 1 calc(50% - 8px); text-align:center; }
+}
+
+/* Hold-to-confirm UI */
+.hold-wrap{
+  display:flex; flex-direction:column; align-items:center;
+  gap:12px; text-align:center;
+}
+.hold-track{
+  width:280px; max-width:90%; height:12px;
+  background:#eee; border:1px solid #dcdcdc; border-radius:999px;
+  overflow:hidden;
+}
+.hold-fill{ height:100%; width:0%; background:#28a745; transition:width .08s linear; }
+.hold-cta{
+  padding:10px 16px; border-radius:8px; border:1px solid #cfd4da;
+  background:#f7f7f7; color:#333; cursor:pointer; font-weight:600;
+}
+.hold-cta:active{ transform:translateY(1px); }
+.hold-hint{ font-size:13px; color:#555; }
+.hold-actions{ display:flex; gap:10px; justify-content:center; }
