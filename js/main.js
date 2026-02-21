@@ -15,11 +15,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Helper to switch visible page
   const showPage = (pageId) => {
-    document.getElementById("subscriptions-page").classList.remove("active");
-    document.getElementById("accounts-page").classList.remove("active");
-    document.getElementById("teams-page").classList.remove("active");
+    // Pages
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     document.getElementById(pageId).classList.add("active");
-    window.scrollTo(0, 0); // Scroll to top on page switch
+
+    // Sidebar Links
+    document.querySelectorAll(".sidebar nav ul li a").forEach(a => a.classList.remove("active"));
+    if (pageId === "subscriptions-page") subscriptionsLink?.classList.add("active");
+    if (pageId === "accounts-page") accountsLink?.classList.add("active");
+    if (pageId === "teams-page") teamsLink?.classList.add("active");
+
+    window.scrollTo(0, 0);
   };
 
   // Sidebar link events
@@ -52,6 +58,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (window.Teams) window.Teams.init();
     });
   }
+
+  // Initial state
+  if (subscriptionsLink) subscriptionsLink.classList.add("active");
 
   // Initialize page modules
   // window.Subscriptions.init(); // Handled by subscriptions.js listener
@@ -111,15 +120,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       </select>
       <div style="display:flex;justify-content:center;gap:12px;margin-top:20px">
         <button id="extend-cancel-btn">Cancel</button>
-        <button id="extend-confirm-btn" style="background:#007bff;color:#fff">Extend</button>
+        <button id="extend-confirm-btn" class="pill-btn" style="background:var(--primary)"><i class="fa-solid fa-calendar-plus" style="color:#fff"></i> Extend</button>
       </div>
     `;
     // Attach button handlers
     document.getElementById("extend-cancel-btn").onclick = () => {
-      if (confirm("Close this modal?")) {
-        cancelModal.style.display = "none";
-        location.reload();
-      }
+      cancelModal.style.display = "none";
     };
     document.getElementById("extend-confirm-btn").onclick = confirmExtend;
   }
@@ -154,20 +160,21 @@ document.addEventListener("DOMContentLoaded", async () => {
           Subscription extended by ${monthsValue} month(s) successfully!
         </p>
         <div style="display:flex;justify-content:center;margin-top:16px">
-          <button onclick="cancelModal.style.display='none'; location.reload();" style="background:#007bff;color:#fff">Close</button>
+          <button id="extend-close" class="pill-btn" style="background:var(--primary)"><i class="fa-solid fa-check" style="color:#fff"></i> Done</button>
         </div>
       `;
+      document.getElementById("extend-close").onclick = () => {
+        cancelModal.style.display = "none";
+      };
       // Refresh the data to reflect changes in the table
-      window.Subscriptions.fetchSubscriptionsData(viewSelector.value);
+      const viewSelector = document.getElementById("view-selector");
+      if (viewSelector && viewSelector.value) {
+        window.Subscriptions.fetchSubscriptionsData(viewSelector.value);
+      }
     } catch (err) {
       console.error("Error extending subscription:", err);
-      // Show error to the admin (using existing message box utility)
-      window.Subscriptions.showMessage(`Error: ${err.message}`, "error");
       cancelModal.style.display = "none";
     }
   }
-
-  // Hook the function to the second placeholder button action
-  window.placeholderAction2 = id => openExtendModal(id);
 
 });

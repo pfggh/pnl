@@ -172,21 +172,22 @@ window.Subscriptions = (() => {
       // Build modal UI
       modalContent.innerHTML = `
         <div style="padding-top:40px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-            <span><strong>Email:</strong> ${detail.email}</span>
-            <button class="copy-btn" data-value="${detail.email}">(copy)</button>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+            <span style="font-size:0.9rem"><strong>Email:</strong> ${detail.email}</span>
+            <button class="copy-btn" data-value="${detail.email}"><i class="fa-regular fa-copy"></i> Copy</button>
           </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;">
-            <span><strong>Password:</strong> ${detail.password}</span>
-            <button class="copy-btn" data-value="${detail.password}">(copy)</button>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;">
+            <span style="font-size:0.9rem"><strong>Password:</strong> ${detail.password}</span>
+            <button class="copy-btn" data-value="${detail.password}"><i class="fa-regular fa-copy"></i> Copy</button>
           </div>
 
-          <div style="display:flex;gap:8px;justify-content:center;margin-top:24px">
-            <button id="gpt-cancel-confirm" class="btn-primary">Cancel Subscription</button>
-            <button id="close-modal-btn" class="btn-primary">Close</button>
+          <div style="display:flex;gap:12px;justify-content:center;margin-top:24px">
+            <button id="gpt-cancel-confirm" class="pill-btn" style="background:var(--primary)"><i class="fa-solid fa-trash-can" style="color:#fff"></i> Cancel Subscription</button>
+            <button id="close-modal-btn" class="pill-btn">Close</button>
           </div>
         </div>
       `;
+      injectCloseButton();
 
       // Bind modal actions with a single handler (avoid multiplying listeners)
       modalContent.onclick = async (e) => {
@@ -243,11 +244,12 @@ window.Subscriptions = (() => {
         </div>
       `;
 
-      // Refresh view and KPIs to reflect the deletion
-      await fetchSubscriptionsData(viewSelector.value);
-      if (typeof fetchDashboardKpis === "function") {
-        await fetchDashboardKpis();
-      }
+      // Remove the row from the table instantly
+      const rowToRemove = subscriptionTable.querySelector(`[data-id="${pay_id}"]`);
+      if (rowToRemove) rowToRemove.closest("tr")?.remove();
+
+      // Refresh KPIs in background
+      fetchDashboardKpis();
 
       // Allow closing
       modalContent.onclick = (e) => e.target.id === "close-modal-btn" && (cancelModal.style.display = "none");
@@ -282,22 +284,22 @@ window.Subscriptions = (() => {
       if (!res.ok || detail.error) throw new Error(detail.error || "Failed to load details.");
       modalContent.innerHTML = `
         <div style="padding-top:40px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-            <span><strong>Email:</strong> ${detail.email}</span>
-            <button class="copy-btn" data-value="${detail.email}">(copy)</button>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+            <span style="font-size:0.9rem"><strong>Email:</strong> ${detail.email}</span>
+            <button class="copy-btn" data-value="${detail.email}"><i class="fa-regular fa-copy"></i> Copy</button>
           </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-            <span><strong>Password:</strong> ${detail.password}</span>
-            <button class="copy-btn" data-value="${detail.password}">(copy)</button>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+            <span style="font-size:0.9rem"><strong>Password:</strong> ${detail.password}</span>
+            <button class="copy-btn" data-value="${detail.password}"><i class="fa-regular fa-copy"></i> Copy</button>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span><strong>Username:</strong></span>
-            <span style="background:#f3f4f6;padding:4px 8px;border-radius:4px;font-family:monospace;word-break:break-all;font-size:1.5em;">${detail.username}</span>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+            <span style="font-size:0.9rem"><strong>Username:</strong></span>
+            <span style="background:rgba(255,255,255,0.05);padding:8px 12px;border-radius:10px;font-family:monospace;word-break:break-all;font-size:1.2rem;color:var(--primary);border:1px solid var(--border);">${detail.username}</span>
           </div>
-          <p class="warning-text">Remove user, and add the new blank invite.</p>
-          <input id="anghami-new-invite" placeholder="New invite link" style="width:100%;box-sizing:border-box" />
-          <div style="display:flex;justify-content:center;margin-top:12px">
-            <button id="anghami-confirm" class="btn-primary">Update Invite & Delete</button>
+          <p class="warning-text" style="font-size:0.85rem;margin-bottom:15px;color:var(--text-muted)">Remove user, and add the new blank invite below.</p>
+          <input id="anghami-new-invite" placeholder="Paste new invite link here..." style="width:100%;margin-bottom:20px;" />
+          <div style="display:flex;justify-content:center;gap:12px;">
+            <button id="anghami-confirm" class="pill-btn" style="background:var(--primary)"><i class="fa-solid fa-check" style="color:#fff"></i> Update & Delete</button>
           </div>
         </div>
       `;
@@ -338,7 +340,9 @@ window.Subscriptions = (() => {
       injectCloseButton();
       document.getElementById("anghami-close").onclick = () => {
         cancelModal.style.display = "none";
-        fetchSubscriptionsData(viewSelector.value);
+        // Remove the row from the table instantly
+        const rowToRemove = subscriptionTable.querySelector(`[data-id="${pay_id}"]`);
+        if (rowToRemove) rowToRemove.closest("tr")?.remove();
         fetchDashboardKpis();
       };
     } catch (e) {
@@ -382,7 +386,7 @@ window.Subscriptions = (() => {
   const kpiEls = {
     anghami: document.getElementById("kpi-anghami"),
     chatgpt: document.getElementById("kpi-chatgpt"),
-    renewals: document.getElementById("kpi-renewals"),
+    private_seats: document.getElementById("kpi-private-seats"),
     unpaid: document.getElementById("kpi-unpaid"),
     orders: document.getElementById("kpi-orders"),
   };
@@ -401,7 +405,7 @@ window.Subscriptions = (() => {
 
       kpiEls.anghami.textContent = j.anghami_spots ?? 0;
       kpiEls.chatgpt.textContent = j.chatgpt_spots ?? 0;
-      kpiEls.renewals.textContent = j.renewals ?? 0;
+      kpiEls.private_seats.textContent = j.private_seats ?? 0;
       kpiEls.unpaid.textContent = j.unpaid ?? 0;
       kpiEls.orders.textContent = j.orders_24h ?? 0;
     } catch (e) {
@@ -410,8 +414,6 @@ window.Subscriptions = (() => {
   }
 
   let currentPayId = null;
-  let lastRequestTime = 0;
-  let lastReplaceRequestTime = 0;
 
   document.addEventListener("DOMContentLoaded", async () => {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
@@ -484,9 +486,17 @@ window.Subscriptions = (() => {
     messageBox.style.display = "block";
   };
   const clearMessage = () => {
+    const box = document.getElementById("count-badge-area");
+    if (box) box.innerHTML = "";
     messageBox.textContent = "";
     messageBox.className = "message-box";
     messageBox.style.display = "none";
+  };
+  const showCountBadge = (text, icon = "fa-solid fa-circle-check") => {
+    const area = document.getElementById("count-badge-area");
+    if (area) {
+      area.innerHTML = `<div class="count-badge"><i class="${icon}"></i> ${text}</div>`;
+    }
   };
   const injectCloseButton = () => {
     if (!modalContent.querySelector("#modal-close-btn")) {
@@ -495,20 +505,9 @@ window.Subscriptions = (() => {
       closeBtn.className = "modal-x-btn";
       closeBtn.innerHTML = "&times;";
       closeBtn.setAttribute("aria-label", "Close");
-      Object.assign(closeBtn.style, {
-        position: "absolute",
-        top: "10px",
-        right: "15px",
-        fontSize: "24px",
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-      });
-      closeBtn.onclick = () => {
-        if (confirm("Close this modal?")) {
-          cancelModal.style.display = "none";
-          fetchSubscriptionsData(viewSelector.value);
-        }
+      closeBtn.onclick = (e) => {
+        e.preventDefault();
+        cancelModal.style.display = "none";
       };
       modalContent.appendChild(closeBtn);
     }
@@ -614,6 +613,7 @@ user: ${it.user}`;
             <th>Action</th>
           </tr>`;
         const pending = data.pendingPayments || [];
+        showCountBadge(`Pending: ${pending.length} rows`, "fa-solid fa-clock");
         if (!pending.length) {
           subscriptionTable.innerHTML = `<tr><td colspan="6" style="text-align:center;">No pending payments found.</td></tr>`;
         } else {
@@ -625,7 +625,7 @@ user: ${it.user}`;
               <td>${row.amount}</td>
               <td>${row.sub}</td>
               <td>${row.timestamp ? new Date(row.timestamp).toLocaleString() : ""}</td>
-              <td><button class="mark-paid-btn" data-id="${row.id}">Mark as Paid</button></td>`;
+              <td><button class="pill-btn mark-paid-btn" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem;"><i class="fa-solid fa-check"></i> Mark as Paid</button></td>`;
             subscriptionTable.appendChild(tr);
           });
         }
@@ -642,8 +642,9 @@ user: ${it.user}`;
             <th>Actions</th>
           </tr>`;
         const pendingRenewals = data.pendingRenewals || [];
+        showCountBadge(`Unpaid NF: ${pendingRenewals.length} rows`, "fa-solid fa-layer-group");
         if (!pendingRenewals.length) {
-          subscriptionTable.innerHTML = `<tr><td colspan="6" style="text-align:center;">No unpaid renewals found.</td></tr>`;
+          subscriptionTable.innerHTML = `<tr><td colspan="7" style="text-align:center;">No unpaid renewals found.</td></tr>`;
         } else {
           pendingRenewals.forEach((row) => {
             const tr = document.createElement("tr");
@@ -655,9 +656,9 @@ user: ${it.user}`;
               <td>${row.accemail ?? ""}</td>
               <td>${row.paid}</td>
               <td>
-                <div class="button-group">
-                  <button class="cancel-sub-btn" data-id="${row.id}">Cancel</button>
-                  <button class="placeholder2-btn" data-id="${row.id}">Renew</button>
+                <div class="button-group" style="display:flex; gap:8px;">
+                  <button class="pill-btn cancel-sub-btn" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem;"><i class="fa-solid fa-xmark"></i> Cancel</button>
+                  <button class="pill-btn placeholder2-btn" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem;"><i class="fa-solid fa-calendar-plus"></i> Renew</button>
                 </div>
               </td>`;
             subscriptionTable.appendChild(tr);
@@ -676,6 +677,7 @@ user: ${it.user}`;
             <th>Actions</th>
           </tr>`;
         const rows = data.unpaidAnghamis || [];
+        showCountBadge(`Unpaid Ang: ${rows.length} rows`, "fa-solid fa-music");
         subscriptionTable.innerHTML = "";
         if (!rows.length) {
           subscriptionTable.innerHTML = `<tr><td colspan="7" style="text-align:center;">No unpaid Anghami renewals.</td></tr>`;
@@ -690,13 +692,12 @@ user: ${it.user}`;
                 <td>${row.duration ?? ""}</td>
                 <td>${row.accemail ?? ""}</td>
                 <td>${row.paid ?? ""}</td>
-                <td><button class="cancel-anghami-btn" data-id="${row.id}">Cancel</button></td>
+                <td><button class="pill-btn cancel-anghami-btn" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem;"><i class="fa-solid fa-xmark"></i> Cancel</button></td>
               </tr>
             `);
           });
         }
       } else if (view === "unpaidgpt") {
-        // ---- BEGIN: new branch for unpaidgpt ----
         subscriptionTableTitle.textContent = "Unpaid GPT Renewals";
         subscriptionTableHead.innerHTML = `
           <tr>
@@ -708,10 +709,9 @@ user: ${it.user}`;
             <th>Paid</th>
             <th>Actions</th>
           </tr>`;
-
         const rows = data.unpaidGpts || [];
+        showCountBadge(`Unpaid GPT: ${rows.length} rows`, "fa-solid fa-robot");
         subscriptionTable.innerHTML = "";
-
         if (!rows.length) {
           subscriptionTable.innerHTML = `<tr><td colspan="7" style="text-align:center;">No unpaid GPT renewals.</td></tr>`;
         } else {
@@ -725,12 +725,11 @@ user: ${it.user}`;
                 <td>${row.duration ?? ""}</td>
                 <td>${row.accemail ?? ""}</td>
                 <td>${row.paid ?? ""}</td>
-                <td><button class="gpt-cancel-btn" data-id="${row.id}">Cancel</button></td>
+                <td><button class="pill-btn gpt-cancel-btn" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem;"><i class="fa-solid fa-xmark"></i> Cancel</button></td>
               </tr>
             `);
           });
         }
-        // ---- END: new branch for unpaidgpt ----
       } else {
         subscriptionTableTitle.textContent = "All Subscriptions";
         subscriptionTableHead.innerHTML = `
@@ -741,6 +740,7 @@ user: ${it.user}`;
             <th>Expiry</th>
           </tr>`;
         const subs = data.subscriptions || [];
+        showCountBadge(`Total: ${subs.length} rows`, "fa-solid fa-database");
         if (!subs.length) {
           subscriptionTable.innerHTML = `<tr><td colspan="4" style="text-align:center;">No subscriptions found.</td></tr>`;
         } else {
@@ -806,70 +806,6 @@ user: ${it.user}`;
     }
   };
 
-  // --- Submit form ---
-  adminForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-
-    const phone = document.getElementById("phone").value.trim();
-    const service = serviceSelector.value;
-    const isPaid = document.getElementById("paid").value === "true";
-
-    // Handle the new Duration Input
-    const durationInput = document.getElementById("duration");
-    let duration = parseInt(durationInput.value, 10);
-    if (isNaN(duration) || duration < 1) duration = 1; // Default to 1 month if invalid/empty
-
-    if (!phone) return showMessage("Please enter a phone number", "error");
-
-    showSpinner(true);
-    clearMessage();
-
-    try {
-      // Canva/GPT Private Specifics
-      const accEmail = subEmailInput?.value?.trim() || "";
-      const username = usernameInput?.value?.trim() || "";
-
-      // Construct Payload
-      const payload = {
-        phone,
-        service,
-        duration,
-        paid: isPaid,
-        accemail: accEmail,
-        username: username,
-      };
-
-      const resp = await fetch(window.SUPABASE_URL + "/functions/v1/add-subscription", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${window.authToken}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error);
-
-      showMessage("Subscription added successfully!", "success");
-      adminForm.reset();
-
-      // Reset Default UI State
-      toggleSubEmailVisibility();
-
-      // Refresh Data if view is active
-      if (viewSelector.value) {
-        fetchSubscriptionsData(viewSelector.value);
-      }
-      fetchDashboardKpis();
-
-    } catch (err) {
-      console.error(err);
-      showMessage(err.message || "Error adding subscription", "error");
-    } finally {
-      showSpinner(false);
-    }
-  });
 
   const placeholderAction1 = (id) => alert(`Placeholder 1 for ${id}`);
   window.placeholderAction2 = (id) => openExtendModal(id);
@@ -889,27 +825,27 @@ user: ${it.user}`;
     const svc = serviceSelector.value.toLowerCase();
     if (svc === "anghami") {
       [1, 3, 6, 12].forEach(m =>
-        durationSelect.appendChild(new Option(`${m} months`, `${m}`))
+        durationSelect.appendChild(new Option(`${m} months`, `${m} `))
       );
     } else if (svc === "canva") {
       [1, 3, 6, 0].forEach(m => {
         if (m === 0) {
           durationSelect.appendChild(new Option(`Lifetime`, "0"));
         } else {
-          durationSelect.appendChild(new Option(`${m} month${m > 1 ? "s" : ""}`, `${m}`));
+          durationSelect.appendChild(new Option(`${m} month${m > 1 ? "s" : ""} `, `${m} `));
         }
       });
     } else if (svc === "chatgpt") {
       [1, 3, 6, 12].forEach(m =>
-        durationSelect.appendChild(new Option(`${m} months`, `${m}`))
+        durationSelect.appendChild(new Option(`${m} months`, `${m} `))
       );
     } else if (svc === "gpt private") {
       [1, 3, 6, 12].forEach(m =>
-        durationSelect.appendChild(new Option(`${m} months`, `${m}`))
+        durationSelect.appendChild(new Option(`${m} months`, `${m} `))
       );
     } else {
       [1, 3, 6, 12].forEach(m =>
-        durationSelect.appendChild(new Option(`${m} month${m > 1 ? "s" : ""}`, `${m}`))
+        durationSelect.appendChild(new Option(`${m} month${m > 1 ? "s" : ""} `, `${m} `))
       );
     }
   }
@@ -954,9 +890,9 @@ user: ${it.user}`;
       detail.user = detail.user || "";
       modalContent.innerHTML = `
         <p><strong>Email:</strong> ${detail.accemail}
-           <button class="copy-btn" data-value="${detail.accemail}">(copy)</button></p>
+          <button class="copy-btn" data-value="${detail.accemail}"><i class="fa-regular fa-copy"></i> Copy</button></p>
         <p><strong>Password:</strong> ${detail.password}
-           <button class="copy-btn" data-value="${detail.password}">(copy)</button></p>
+           <button class="copy-btn" data-value="${detail.password}"><i class="fa-regular fa-copy"></i> Copy</button></p>
         <p><strong>User:</strong> ${detail.user}</p>
         <p class="warning-text">
           Delete the profile, recreate it, and kick out the user's devices.
@@ -987,17 +923,17 @@ user: ${it.user}`;
           numbersHTML = `
             <p style="margin-top:12px;font-weight:bold">Other numbers:</p>
             <ul>
-              ${otherNumbers
+        ${otherNumbers
               .map(({ phone, expiry }) => {
                 const expired = new Date(expiry) <= new Date();
                 return `
                     <li>
                       ${phone || ""}${expired ? ' <span style="color:red">(expired)</span>' : ""}
-                      <button class="copy-btn" data-value="${phone || ""}">(copy)</button>
+                      <button class="copy-btn" data-value="${phone || ""}"><i class="fa-regular fa-copy"></i> Copy</button>
                     </li>`;
               })
               .join("")}
-            </ul>`;
+      </ul>`;
         }
         modalContent.innerHTML = `
           <p style="color:#16a34a;font-weight:bold;text-align:center">
@@ -1010,9 +946,9 @@ password: ${newPass}
           </textarea>
           <button id="copy-message-btn">Copy message</button>
           ${numbersHTML}
-          <div style="display:flex;justify-content:center;margin-top:16px">
-            <button id="close-modal-btn" class="btn-primary">Close</button>
-          </div>`;
+  <div style="display:flex;justify-content:center;margin-top:16px">
+    <button id="close-modal-btn" class="btn-primary">Close</button>
+  </div>`;
         injectCloseButton();
       };
     } catch (err) {
@@ -1024,9 +960,9 @@ password: ${newPass}
   const openExtendModal = (payId) => {
     currentPayId = payId;
     let service = "Netflix";
-    const row = Array.from(subscriptionTable.querySelectorAll("tr")).find(tr =>
-      tr.querySelector(`[data-id="${payId}"]`)
-    );
+    const row = Array.from(subscriptionTable.querySelectorAll("tr")).find(tr => {
+      return tr.querySelector(`[data-id="${payId}"]`);
+    });
     if (row) {
       const subCell = row.cells && row.cells[3];
       if (subCell) {
@@ -1099,11 +1035,11 @@ password: ${newPass}
         <p style="color:#16a34a;font-weight:bold;text-align:center">
           Subscription extended${months === 0 ? " to Lifetime!" : ` by ${months} month(s)!`}
         </p>
-        <div style="display:flex;justify-content:center;margin-top:16px">
-          <button onclick="cancelModal.style.display='none'" class="btn-primary">
-            Close
-          </button>
-        </div>`;
+    <div style="display:flex;justify-content:center;margin-top:16px">
+      <button onclick="cancelModal.style.display='none'" class="btn-primary">
+        Close
+      </button>
+    </div>`;
       injectCloseButton();
       fetchSubscriptionsData(viewSelector.value);
       fetchDashboardKpis();
@@ -1132,12 +1068,6 @@ password: ${newPass}
       const confirmed = await confirmSubmitModal();
       if (!confirmed) return;
       clearMessage();
-      const currentTime = Date.now();
-      if (currentTime - lastRequestTime < 10000) {
-        showMessage("Please wait 10 seconds before trying again.", "error");
-        return;
-      }
-      lastRequestTime = currentTime;
       showSpinner(true);
       submitBtn.disabled = true;
 
@@ -1176,9 +1106,6 @@ password: ${newPass}
         body.sub_email = subEmail; // required for Canva
       } else if (svc === "gpt private") {
         endpoint = "/functions/v1/addprivate";
-        // Map fields for addprivate: needs { phone, email, duration, paid }
-        // We already have phone, duration, paid.
-        // We use 'subEmail' (the visible email field) as 'email'
         body.email = subEmail;
       } else {
         endpoint = "/functions/v1/addnf";
@@ -1244,10 +1171,8 @@ password: ${newPass}
           showMessage("", "success");
           fetchDashboardKpis();
 
-          // Use API expiry if present, else fallback to now + duration months
           let expiryString = "";
           if (data.expiry) {
-            // If expiry is string "lifetime" (any case), show it as Lifetime
             if (
               typeof data.expiry === "string" &&
               data.expiry.trim().toLowerCase() === "lifetime"
@@ -1255,13 +1180,12 @@ password: ${newPass}
               expiryString = "Lifetime";
             } else {
               const expiryDate = new Date(data.expiry);
-              // Check for invalid date
               if (!isNaN(expiryDate.getTime())) {
                 expiryString = expiryDate.toLocaleDateString('en-GB', {
                   weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
                 });
               } else {
-                expiryString = data.expiry; // fallback (display as is)
+                expiryString = data.expiry;
               }
             }
           } else {
@@ -1272,7 +1196,6 @@ password: ${newPass}
             });
           }
 
-          // One-click copy (only link & expiry per your request)
           const btn = document.createElement("button");
           btn.textContent = "Copy Canva Info";
           btn.onclick = async () => {
@@ -1283,14 +1206,12 @@ password: ${newPass}
           };
           messageBox.appendChild(btn);
 
-          // Optional: clear the email field after success
           const subEmailInput = document.getElementById("sub-email");
           if (subEmailInput) subEmailInput.value = "";
 
         } else if (svc === "gpt private") {
           showMessage("Private Invite Sent!", "success");
           fetchDashboardKpis();
-          // data.team_id, data.expiry
           messageBox.innerHTML += `
              <div style="margin-top:10px; padding:10px; background:white; border-left:4px solid green; color:#333;">
                <strong>Success!</strong><br/>
@@ -1345,116 +1266,45 @@ password: ${newPass}
       });
     }
 
-    // --- GPT Renewals Trigger (bulk unpaid renewals creation) ---
-    async function doTriggerGptRenewals() {
+    // --- Trigger functions with robust handling ---
+    async function doGenericTrigger(btnId, limitId, endpoint, title, successPrefix) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      const oldText = btn.textContent;
+
       clearMessage();
       showSpinner(true);
+      btn.disabled = true;
+      btn.textContent = "Processing...";
 
       try {
-        const currentTime = Date.now();
-        // Reuse rate-limit logic from the others, but ensure lastRequestTime exists
-        if (typeof lastRequestTime === 'number' && currentTime - lastRequestTime < 10_000) {
-          showMessage("Please wait 10 seconds before trying again.", "error");
-          showSpinner(false);
-          return;
-        }
-        lastRequestTime = currentTime;
-
         const { data: { session } } = await window.supabaseClient.auth.getSession();
         const token = session?.access_token;
 
-        const limitEl = document.getElementById("gpt-limit");
-        const limit = limitEl ? (Number(limitEl.value) || 500) : 500;
+        let body = {};
+        if (limitId) {
+          const limitEl = document.getElementById(limitId);
+          body.limit = limitEl ? (Number(limitEl.value) || 500) : 500;
+          body.dry_run = false;
+        }
 
-        const resp = await fetch(`${window.SUPABASE_URL}/functions/v1/addrenew_gpt`, {
+        const resp = await fetch(`${window.SUPABASE_URL}${endpoint}`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ limit, dry_run: false })
+          body: JSON.stringify(body)
         });
         const data = await resp.json();
         if (!resp.ok || data.error) throw new Error(data.error || "Error");
 
-        showMessage(
-          `GPT renewals — inserted: ${data.inserted ?? 0}, skipped: ${data.skipped_existing ?? 0}`,
-          "success"
-        );
-
-        if (Array.from(viewSelector.options).some(o => o.value === "unpaidgpt")) {
-          viewSelector.value = "unpaidgpt";
+        if (successPrefix) {
+          const inserted = data.inserted ?? 0;
+          const skipped = data.skipped_existing ?? 0;
+          showCountBadge(`${successPrefix}: ${inserted} processed`, "fa-solid fa-bolt-lightning");
+          showMessage(`${successPrefix} — inserted: ${inserted}, skipped: ${skipped}`, "success");
+        } else {
+          showMessage(`Success: ${data.message || "Action completed"}`, "success");
         }
-        await fetchSubscriptionsData(viewSelector.value);
-        if (typeof fetchDashboardKpis === "function") {
-          await fetchDashboardKpis();
-        }
-      } catch (e) {
-        console.error(e);
-        showMessage(`Error: ${e.message}`, "error");
-      } finally {
-        showSpinner(false);
-      }
-    }
 
-    // --- Anghami Renewals Trigger (unchanged) ---
-    async function doTriggerAnghamiRenewals() {
-      clearMessage();
-      showSpinner(true);
-
-      const currentTime = Date.now();
-      if (currentTime - lastRequestTime < 10000) {
-        showMessage("Please wait 10 seconds before trying again.", "error");
-        showSpinner(false);
-        return;
-      }
-      lastRequestTime = currentTime;
-
-      const { data: { session } } = await window.supabaseClient.auth.getSession();
-      const token = session?.access_token;
-      try {
-        const limitEl = document.getElementById("anghami-limit");
-        const limit = limitEl ? Number(limitEl.value) || 500 : 500;
-        const resp = await fetch(`${window.SUPABASE_URL}/functions/v1/addrenew_anghami`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ limit, dry_run: false })
-        });
-        const data = await resp.json();
-        if (!resp.ok || data.error) throw new Error(data.error || "Error");
-        showMessage(`Anghami renewals — inserted: ${data.inserted || 0}, skipped: ${data.skipped_existing || 0}`, "success");
-        if (Array.from(viewSelector.options).some(o => o.value === "unpaidanghami")) {
-          viewSelector.value = "unpaidanghami";
-        }
-        await fetchSubscriptionsData(viewSelector.value);
-        await fetchDashboardKpis();
-      } catch (e) {
-        console.error(e);
-        showMessage(`Error: ${e.message}`, "error");
-      } finally {
-        showSpinner(false);
-      }
-    }
-
-    async function doTriggerRenewals() {
-      clearMessage();
-      showSpinner(true);
-
-      const currentTime = Date.now();
-      if (currentTime - lastRequestTime < 10000) {
-        showMessage("Please wait 10 seconds before trying again.", "error");
-        showSpinner(false);
-        return;
-      }
-      lastRequestTime = currentTime;
-
-      const { data: { session } } = await window.supabaseClient.auth.getSession();
-      const token = session?.access_token;
-      try {
-        const resp = await fetch(window.SUPABASE_URL + "/functions/v1/addrenew", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
-        });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || "Error");
-        showMessage(`Success: ${data.message}`, "success");
         fetchSubscriptionsData(viewSelector.value);
         fetchDashboardKpis();
       } catch (e) {
@@ -1462,37 +1312,8 @@ password: ${newPass}
         showMessage(`Error: ${e.message}`, "error");
       } finally {
         showSpinner(false);
-      }
-    }
-
-    async function doTriggerMessage() {
-      clearMessage();
-      showSpinner(true);
-
-      const currentTime = Date.now();
-      if (currentTime - lastRequestTime < 10000) {
-        showMessage("Please wait 10 seconds before trying again.", "error");
-        showSpinner(false);
-        return;
-      }
-      lastRequestTime = currentTime;
-
-      const { data: { session } } = await window.supabaseClient.auth.getSession();
-      const token = session?.access_token;
-      try {
-        const resp = await fetch(window.SUPABASE_URL + "/functions/v1/auto_msg", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
-        });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || "Error");
-        showMessage(`Success: ${data.message}`, "success");
-        fetchSubscriptionsData(viewSelector.value);
-      } catch (e) {
-        console.error(e);
-        showMessage(`Error: ${e.message}`, "error");
-      } finally {
-        showSpinner(false);
+        btn.disabled = false;
+        btn.textContent = oldText;
       }
     }
 
@@ -1503,7 +1324,7 @@ password: ${newPass}
         title: "Create Anghami Pending Renewals",
         body: "This will create unpaid renewal entries for expired Anghami subscriptions.",
         seconds: 3,
-        onConfirm: () => doTriggerAnghamiRenewals()
+        onConfirm: () => doGenericTrigger("trigger-anghami-renewals-btn", "anghami-limit", "/functions/v1/addrenew_anghami", null, "Anghami renewals")
       });
     }
 
@@ -1514,7 +1335,7 @@ password: ${newPass}
         title: "Trigger Renewal Payments",
         body: "This will trigger renewal payments for eligible customers.",
         seconds: 3,
-        onConfirm: () => doTriggerRenewals()
+        onConfirm: () => doGenericTrigger("trigger-renewals-btn", null, "/functions/v1/addrenew")
       });
     }
 
@@ -1525,7 +1346,7 @@ password: ${newPass}
         title: "Add GPT Renewals",
         body: "This will add unpaid renewal payments for eligible GPT subscriptions.",
         seconds: 3,
-        onConfirm: () => doTriggerGptRenewals()
+        onConfirm: () => doGenericTrigger("trigger-gpt-renewals-btn", "gpt-limit", "/functions/v1/addrenew_gpt", null, "GPT renewals")
       });
     }
 
@@ -1536,7 +1357,7 @@ password: ${newPass}
         title: "Trigger Message",
         body: "This will send messages to customers.",
         seconds: 3,
-        onConfirm: () => doTriggerMessage()
+        onConfirm: () => doGenericTrigger("trigger-msg", null, "/functions/v1/auto_msg")
       });
     }
 
@@ -1558,86 +1379,75 @@ password: ${newPass}
       }
     });
 
-    let replaceBtnHandlerAttached = false;
-    if (replaceBtn && replaceEmailInput && !replaceBtnHandlerAttached) {
-      replaceBtnHandlerAttached = true;
-      replaceBtn.addEventListener("click", (() => {
-        let inProgress = false;
-        return async () => {
-          const now = Date.now();
-          if (now - lastReplaceRequestTime < 10000) {
-            showMessage("Please wait 10 seconds before trying again.", "error");
-            return;
-          }
-          if (inProgress) return;
-          inProgress = true;
-          lastReplaceRequestTime = now;
-          try {
-            const accemail = replaceEmailInput.value.trim();
-            if (!accemail) {
-              showMessage("Enter an account email to replace.", "error");
-              inProgress = false;
-              return;
-            }
-            clearMessage();
-            showSpinner(true);
+    if (replaceBtn && replaceEmailInput) {
+      replaceBtn.onclick = async () => {
+        const oldText = replaceBtn.textContent;
+        try {
+          const accemail = replaceEmailInput.value.trim();
+          if (!accemail) return showMessage("Enter an account email to replace.", "error");
 
-            const { data: { session } } = await window.supabaseClient.auth.getSession();
-            const token = session?.access_token;
-            if (!token) throw new Error("Not authenticated.");
+          clearMessage();
+          showSpinner(true);
+          replaceBtn.disabled = true;
+          replaceBtn.textContent = "Processing...";
 
-            const res = await fetch(`${window.SUPABASE_URL}/functions/v1/replacenf`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-              body: JSON.stringify({ accemail })
-            });
+          const { data: { session } } = await window.supabaseClient.auth.getSession();
+          const token = session?.access_token;
+          if (!token) throw new Error("Not authenticated.");
 
-            const data = await res.json();
-            if (!res.ok || data.error) {
-              throw new Error(data.error || "Replacement failed.");
-            }
-            const rows = Array.isArray(data) ? data : (data.replacements || []);
-            if (!Array.isArray(rows)) {
-              throw new Error("Unexpected response format from replacenf.");
-            }
-            modalContent.innerHTML = buildReplaceModalList(rows);
-            injectCloseButton();
-            cancelModal.style.display = "flex";
-          } catch (err) {
-            console.error(err);
-            showMessage(`Error: ${err.message}`, "error");
-          } finally {
-            showSpinner(false);
-            inProgress = false;
-          }
-        };
-      })());
+          const res = await fetch(`${window.SUPABASE_URL}/functions/v1/replacenf`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+            body: JSON.stringify({ accemail })
+          });
+
+          const data = await res.json();
+          if (!res.ok || data.error) throw new Error(data.error || "Replacement failed.");
+
+          const rows = Array.isArray(data) ? data : (data.replacements || []);
+          modalContent.innerHTML = buildReplaceModalList(rows);
+          injectCloseButton();
+          cancelModal.style.display = "flex";
+        } catch (err) {
+          console.error(err);
+          showMessage(`Error: ${err.message}`, "error");
+        } finally {
+          showSpinner(false);
+          replaceBtn.disabled = false;
+          replaceBtn.textContent = oldText;
+        }
+      };
     }
 
     modalContent.addEventListener("click", async (e) => {
       if (e.target.classList.contains("copy-btn")) {
         navigator.clipboard.writeText(e.target.dataset.value);
+        showMessage("Copied!", "success");
       }
       if (e.target.id === "copy-message-btn") {
-        navigator.clipboard.writeText(
-          document.getElementById("copy-msg").value
-        );
+        const msgText = document.getElementById("copy-msg")?.value;
+        if (msgText) {
+          navigator.clipboard.writeText(msgText);
+          showMessage("Message copied!", "success");
+        }
       }
       if (e.target.id === "close-modal-btn") {
         cancelModal.style.display = "none";
       }
       if (e.target.classList.contains("copy-phone")) {
-        const v = e.target.getAttribute("data-phone") || "";
-        if (!v) return;
-        await navigator.clipboard.writeText(v);
-        showMessage("Phone copied.", "success");
+        const v = e.target.getAttribute("data-phone");
+        if (v) {
+          await navigator.clipboard.writeText(v);
+          showMessage("Phone copied.", "success");
+        }
       }
       if (e.target.classList.contains("copy-msg")) {
-        const v = e.target.getAttribute("data-msg") || "";
-        if (!v) return;
-        const msg = v.replace(/&#10;/g, '\n').replace(/&quot;/g, '"');
-        await navigator.clipboard.writeText(msg);
-        showMessage("Message copied.", "success");
+        const v = e.target.getAttribute("data-msg");
+        if (v) {
+          const msg = v.replace(/&#10;/g, '\n').replace(/&quot;/g, '"');
+          await navigator.clipboard.writeText(msg);
+          showMessage("Message copied.", "success");
+        }
       }
     });
   };
