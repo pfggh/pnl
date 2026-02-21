@@ -8,127 +8,146 @@
   <!-- External CSS and Supabase JS -->
   <link rel="stylesheet" href="css/style.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
   <!-- Launch Animation Overlay -->
   <div id="launch-overlay"
-    style="position:fixed; inset:0; background:#ffffff; z-index:10000; display:flex; align-items:center; justify-content:center; transition: opacity 0.6s ease;">
-    <img src="img/logo.png" alt="Loading..." style="width:120px; animation: pulse 1.5s infinite;">
+    style="position:fixed; inset:0; background:#0a0f1d; z-index:10000; display:flex; align-items:center; justify-content:center; transition: opacity 0.8s ease;">
+    <img src="img/logo.png" alt="Loading..."
+      style="width:120px; filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.4)); animation: pulse 1.5s infinite;">
   </div>
 
   <div class="layout">
     <!-- SIDEBAR -->
     <aside class="sidebar">
-      <div class="logo-container" style="text-align: center; margin-bottom: 30px;">
-        <img src="img/logo.png" alt="Teshrij Logo"
-          style="max-width: 80%; height: auto; display: block; margin: 0 auto;">
+      <div class="logo-container">
+        <img src="img/logo.png" alt="Teshrij Logo">
       </div>
       <nav>
         <ul>
-          <li><a href="#" id="subscriptions-link">Subscriptions</a></li>
-          <li><a href="#" id="accounts-link">Accounts</a></li>
-          <li><a href="#" id="teams-link">GPT Workspace</a></li>
+          <li><a href="#" id="subscriptions-link" class="active"><i class="fa-solid fa-list-check"></i>
+              <span>Subscriptions</span></a></li>
+          <li><a href="#" id="accounts-link"><i class="fa-regular fa-user"></i> <span>Accounts</span></a></li>
+          <li><a href="#" id="teams-link"><i class="fa-solid fa-people-group"></i> <span>GPT Workspace</span></a></li>
         </ul>
       </nav>
     </aside>
 
-
-    <!-- MAIN CONTENT -->
     <main class="content">
       <!-- SUBSCRIPTIONS PAGE -->
       <div id="subscriptions-page" class="page active">
-        <div class="panel-container">
-          <!-- Clean header with title only -->
+        <header class="page-header">
+          <h1>Dashboard Overview</h1>
+        </header>
 
-
-          <div id="kpi-bar">
-            <div class="kpi-card">
-              <span class="kpi-label">angh rdy:</span>
-              <span class="kpi-value" id="kpi-anghami">—</span>
-            </div>
-            <div class="kpi-card">
-              <span class="kpi-label">gpt rdy:</span>
-              <span class="kpi-value" id="kpi-chatgpt">—</span>
-            </div>
-            <div class="kpi-card">
-              <span class="kpi-label"> nf renew: </span>
-              <span class="kpi-value" id="kpi-renewals">—</span>
-            </div>
-            <div class="kpi-card">
-              <span class="kpi-label">pnding pay:</span>
-              <span class="kpi-value" id="kpi-unpaid">—</span>
-            </div>
-            <div class="kpi-card">
-              <span class="kpi-label">Orders 24h:</span>
-              <span class="kpi-value" id="kpi-orders">—</span>
-            </div>
+        <div id="kpi-bar" class="grid-kpi">
+          <div class="kpi-card">
+            <span class="kpi-label"><i class="fa-solid fa-music" style="color: #10b981;"></i> Anghami Ready</span>
+            <span class="kpi-value" id="kpi-anghami">—</span>
           </div>
-
-
-
-          <div id="spinner" class="spinner" style="display:none;"></div>
-          <div id="message-box" class="message-box"></div>
-
-          <!-- Add subscription -->
-          <form id="admin-form">
-            <input type="text" id="phone" placeholder="Phone Number" required />
-            <input type="text" id="username" placeholder="Username (Anghami only)" />
-            <input type="email" id="sub-email" placeholder="email(canva)" />
-
-            <select id="service">
-              <option value="Netflix" selected>Netflix</option>
-              <option value="Anghami">Anghami</option>
-              <option value="chatGPT">chatGPT</option>
-              <option value="Canva">Canva</option>
-              <option value="GPT Private">GPT Private</option>
-            </select>
-            <div class="custom-select-wrapper">
-              <input type="text" id="duration" list="duration-options" placeholder="Duration (Months)" required
-                autocomplete="off" />
-              <datalist id="duration-options">
-                <option value="1">1 Month</option>
-                <option value="3">3 Months</option>
-                <option value="6">6 Months</option>
-                <option value="12">12 Months</option>
-              </datalist>
-            </div>
-            <select id="paid">
-              <option value="true">Paid</option>
-              <option value="false" selected>Not Paid</option>
-            </select>
-            <button type="submit" id="submit-btn">Submit</button>
-
-            <!-- Actions row (replaces Logout) -->
-            <div class="actions-row">
-              <button id="open-reactivate-modal" class="pill-btn">Reactivate GPT</button>
-              <button id="open-replace-modal" class="pill-btn">Replace Netflix</button>
-              <button id="trigger-renewals-btn" class="pill-btn">add nf renew</button>
-              <button id="trigger-anghami-renewals-btn" class="pill-btn">add ang renew</button>
-              <button id="trigger-gpt-renewals-btn" class="pill-btn">add gpt renew</button>
-              <button id="trigger-msg" class="pill-btn">Trigger Message</button>
-            </div>
+          <div class="kpi-card">
+            <span class="kpi-label"><i class="fa-solid fa-robot" style="color: #6366f1;"></i> GPT Ready</span>
+            <span class="kpi-value" id="kpi-chatgpt">—</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label"><i class="fa-solid fa-gem" style="color: #f43f5e;"></i> Private Seats</span>
+            <span class="kpi-value" id="kpi-private-seats">—</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label"><i class="fa-solid fa-credit-card" style="color: #f59e0b;"></i> Unpaid Orders</span>
+            <span class="kpi-value" id="kpi-unpaid">—</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label"><i class="fa-solid fa-box" style="color: #8b5cf6;"></i> Orders 24h</span>
+            <span class="kpi-value" id="kpi-orders">—</span>
+          </div>
         </div>
 
-        </form>
+        <div id="spinner" class="spinner"></div>
+        <div id="message-box" class="message-box"></div>
+
+        <div class="dashboard-grid">
+          <div class="panel-container">
+            <h2 class="section-title"><i class="fa-solid fa-plus-circle"></i> New Subscription</h2>
+            <form id="admin-form" class="stack-form">
+              <input type="text" id="phone" placeholder="Phone Number" required />
+              <input type="text" id="username" placeholder="Username (Anghami only)" />
+              <input type="email" id="sub-email" placeholder="Customer Email (Canva/Private)" />
+              <select id="service">
+                <option value="Netflix" selected>Netflix Account</option>
+                <option value="Anghami">Anghami Plus</option>
+                <option value="chatGPT">chatGPT Plus</option>
+                <option value="Canva">Canva Pro</option>
+                <option value="GPT Private">GPT Private Team</option>
+              </select>
+              <div class="custom-select-wrapper">
+                <input type="text" id="duration" list="duration-options" placeholder="Duration (Months)" required
+                  autocomplete="off" />
+                <datalist id="duration-options">
+                  <option value="1">1 Month</option>
+                  <option value="3">3 Months</option>
+                  <option value="6">6 Months</option>
+                  <option value="12">12 Months</option>
+                </datalist>
+              </div>
+              <select id="paid">
+                <option value="true">Paid ✅</option>
+                <option value="false" selected>Not Paid ❌</option>
+              </select>
+              <button type="submit" id="submit-btn" style="width: 100%;">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Create Subscription
+              </button>
+            </form>
+          </div>
+
+          <div class="panel-container">
+            <h2 class="section-title"><i class="fa-solid fa-screwdriver-wrench"></i> Management Tools</h2>
+            <div class="actions-row">
+              <button id="open-reactivate-modal" class="pill-btn"><i class="fa-solid fa-bolt"></i> Reactivate
+                GPT</button>
+              <button id="open-replace-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace
+                Netflix</button>
+              <button id="trigger-renewals-btn" class="pill-btn"><i class="fa-solid fa-plus"></i> Add NF Renew</button>
+              <button id="trigger-anghami-renewals-btn" class="pill-btn"><i class="fa-solid fa-plus"></i> Add Ang
+                Renew</button>
+              <button id="trigger-gpt-renewals-btn" class="pill-btn"><i class="fa-solid fa-plus"></i> Add GPT
+                Renew</button>
+              <button id="trigger-msg" class="pill-btn"><i class="fa-solid fa-paper-plane"></i> Send Messages</button>
+            </div>
+          </div>
+        </div>
 
         <!-- Hidden modal templates (Reactivate GPT + Replace Netflix) -->
         <div id="reactivate-modal-template" style="display:none">
-          <h3>Reactivate GPT Code</h3>
-          <input type="text" id="reactivate-phone" placeholder="Enter phone" />
-          <button id="reactivate-search-btn">Search</button>
-          <select id="reactivate-sub-select" style="display:none"></select>
-          <button id="reactivate-btn" style="display:none">Reactivate</button>
-          <div id="reactivate-msg"></div>
+          <h3><i class="fa-solid fa-bolt" style="color:var(--primary)"></i> Reactivate GPT Code</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:15px;">Search by phone number to
+            reactivate a subscription's forwarding code.</p>
+          <div style="display:flex; gap:10px; margin-bottom:15px;">
+            <input type="text" id="reactivate-phone" placeholder="Enter phone..." style="flex:1" />
+            <button id="reactivate-search-btn" class="pill-btn" style="background:var(--primary); padding:10px 20px;"><i
+                class="fa-solid fa-magnifying-glass" style="color:#fff"></i> Search</button>
+          </div>
+          <select id="reactivate-sub-select" style="display:none; width:100%; margin-bottom:15px;"></select>
+          <button id="reactivate-btn" class="pill-btn"
+            style="display:none; width:100%; background:var(--primary); justify-content:center;"><i
+              class="fa-solid fa-bolt" style="color:#fff"></i> Reactivate Now</button>
+          <div id="reactivate-msg" style="margin-top:15px; text-align:center; font-weight:700;"></div>
         </div>
 
         <div id="replace-modal-template" style="display:none">
-          <h3>Replace Netflix Account</h3>
-          <input type="text" id="replace-email" placeholder="Account email to replace" />
-          <button id="replace-btn">Replace</button>
-          <small style="opacity:.8;display:block;margin-top:6px">
-            This will replace all active subs using this email. Expired subs get removed.
+          <h3><i class="fa-solid fa-rotate" style="color:var(--primary)"></i> Replace Netflix Account</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:15px;">Replace all active subscriptions on
+            a specific account email.</p>
+          <input type="text" id="replace-email" placeholder="Account email to replace..."
+            style="width:100%; margin-bottom:15px;" />
+          <button id="replace-btn" class="pill-btn"
+            style="width:100%; background:var(--primary); justify-content:center;"><i class="fa-solid fa-rotate"
+              style="color:#fff"></i> Process Replacement</button>
+          <small style="opacity:.6; display:block; margin-top:10px; text-align:center;">
+            All active subs migrate to the new account. Expired subs are removed.
           </small>
         </div>
 
@@ -146,6 +165,7 @@
           </select>
         </div>
         <h2 class="section-title" id="subscription-table-title" style="display:none;">Pending Payments</h2>
+        <div id="count-badge-area" style="margin-top:10px;"></div>
         <div class="table-container" id="subscription-table-container" style="display:none;">
           <table id="subscription-table">
             <thead>
@@ -164,38 +184,45 @@
 
       <!-- ACCOUNTS & ISSUES PAGE -->
       <div id="accounts-page" class="page">
-        <h1>Accounts & Issues</h1>
+        <header class="page-header">
+          <h1>Accounts & Issues</h1>
+        </header>
+
         <div class="panel-container">
+          <h2 class="section-title">Add New Account</h2>
           <div id="spinner-accs" class="spinner"></div>
           <div id="message-box-accs" class="message-box"></div>
           <form id="add-acc-form">
-            <select id="acc-service">
-              <option value="Netflix" selected>Netflix</option>
-              <option value="Anghami">Anghami</option>
-              <option value="chatGPT">chatGPT</option>
-            </select>
-            <input type="text" id="acc-email" placeholder="Account Email" required />
-            <input type="text" id="acc-pass" placeholder="Account Password" required />
-            <div id="anghami-links" style="display:none;">
+            <div class="grid-3">
+              <select id="acc-service">
+                <option value="Netflix" selected>Netflix</option>
+                <option value="Anghami">Anghami</option>
+                <option value="chatGPT">chatGPT</option>
+              </select>
+              <input type="text" id="acc-email" placeholder="Account Email" required />
+              <input type="text" id="acc-pass" placeholder="Account Password" required />
+            </div>
+
+            <div id="anghami-links" style="display:none;" class="grid-5">
               <input type="text" id="link1" placeholder="Link 1" />
               <input type="text" id="link2" placeholder="Link 2" />
               <input type="text" id="link3" placeholder="Link 3" />
               <input type="text" id="link4" placeholder="Link 4" />
               <input type="text" id="link5" placeholder="Link 5" />
             </div>
-            <button type="submit" id="add-acc-btn">Add Account</button>
+            <button type="submit" id="add-acc-btn"><i class="fa-solid fa-plus-circle"></i> Add Account</button>
           </form>
         </div>
 
-        <h2 class="section-title">View:</h2>
-        <div class="select-container">
+        <h2 class="section-title">Views</h2>
+        <div class="select-container" style="margin-bottom: 20px;">
           <select id="accounts-view-selector">
             <option value="fetchissues">All Issues</option>
             <option value="fetchunfixed">Unsolved Issues</option>
             <option value="accs" selected>All Accounts</option>
           </select>
         </div>
-        <h2 class="section-title" id="accounts-issues-title">All Accounts</h2>
+        <h2 class="section-title" id="accounts-issues-title">Current View</h2>
         <div class="table-container">
           <table id="accounts-issues-table">
             <thead></thead>
@@ -204,57 +231,57 @@
         </div>
       </div>
 
+      <!-- TEAMS PAGE -->
       <div id="teams-page" class="page">
-        <h1>GPT Teams Manager</h1>
+        <header class="page-header">
+          <h1>GPT Teams Manager</h1>
+        </header>
 
         <div class="panel-container">
           <div id="spinner-teams" class="spinner" style="display:none;"></div>
           <div id="message-box-teams" class="message-box"></div>
 
-          <div
-            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; align-items: start;">
-
+          <div class="grid-tools">
             <!-- TOOL 1: Shared Fix -->
-            <div
-              style="background:#f9fafb; padding:20px; border-radius:12px; border:1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-              <h2 class="section-title"
-                style="margin-top:0; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; color: #374151;">🛠️ Fix
-                Shared</h2>
-              <p style="margin-top:5px; color:#6b7280; font-size: 0.9em;">
+            <div class="tool-card"
+              style="background: rgba(255,255,255,0.02); padding: 25px; border-radius: 16px; border: 1px solid var(--border);">
+              <h2 style="margin-top:0; color: #818cf8; display: flex; align-items: center; gap: 10px;"><i
+                  class="fa-solid fa-tools"></i> Fix Shared</h2>
+              <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">
                 Migrate shared teams from dead owners to fresh supply.
               </p>
-              <form id="fix-shared-form" style="display:flex; flex-direction: column; gap:12px; margin-top:15px;">
-                <div style="display: flex; gap: 8px;">
-                  <input type="email" id="fix-email" placeholder="User email to fix..." required
-                    style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb;" />
-                  <button type="submit" id="fix-btn"
-                    style="background-color:#4f46e5; color:white; padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Migrate</button>
+              <form id="fix-shared-form">
+                <div style="display: flex; gap: 12px;">
+                  <input type="email" id="fix-email" placeholder="User email to fix..." required />
+                  <button type="submit" id="fix-search-btn" style="padding: 10px 20px; font-size: 0.9rem;"><i
+                      class="fa-solid fa-magnifying-glass"></i> Search</button>
                 </div>
+                <div id="fix-results" style="display:none; margin-top:20px;"></div>
+                <button type="button" id="fix-btn" class="btn-primary"
+                  style="display:none; width: 100%; margin-top: 15px;"><i class="fa-solid fa-rocket"></i> Migrate
+                  User</button>
               </form>
-              <div id="fix-results" style="margin-top:15px;"></div>
             </div>
 
             <!-- TOOL 3: Fix Private -->
-            <div
-              style="background:#fef2f2; padding:20px; border-radius:12px; border:1px solid #fecaca; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-              <h2 class="section-title"
-                style="margin-top:0; border-bottom: 2px solid #fecaca; padding-bottom: 10px; color: #991b1b;">🛠️ Fix
-                Private</h2>
-              <p style="margin-top:5px; color:#991b1b; font-size: 0.9em;">
+            <div class="tool-card"
+              style="background: rgba(255,255,255,0.02); padding: 25px; border-radius: 16px; border: 1px solid var(--border);">
+              <h2 style="margin-top:0; color: #f87171; display: flex; align-items: center; gap: 10px;"><i
+                  class="fa-solid fa-skull"></i> Fix Private</h2>
+              <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">
                 Search or migrate private team if workspace is dead.
               </p>
-              <form id="fix-private-form" style="display:flex; flex-direction: column; gap:12px; margin-top:15px;">
-                <div style="display: flex; gap: 8px;">
-                  <input type="email" id="fix-p-email" placeholder="Customer Email..." required
-                    style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #fecaca;" />
+              <form id="fix-private-form">
+                <div style="display: flex; gap: 12px;">
+                  <input type="email" id="fix-p-email" placeholder="Customer Email..." required />
                   <button type="submit" id="fix-p-search-btn"
-                    style="background-color:#ef4444; color:white; padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer;">🔍
-                    Search</button>
+                    style="padding: 10px 20px; font-size: 0.9rem; background: #ef4444;"><i
+                      class="fa-solid fa-magnifying-glass"></i> Search</button>
                 </div>
-                <div id="fix-p-results" style="display:none; margin-top:5px;"></div>
-                <button type="button" id="fix-p-replace-btn"
-                  style="display:none; background-color:#1f2937; color:white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px;">💀
-                  Replace & Migrate Team</button>
+                <div id="fix-p-results" style="display:none; margin-top:20px;"></div>
+                <button type="button" id="fix-p-replace-btn" class="btn-primary"
+                  style="display:none; width: 100%; margin-top: 15px; background: #ef4444;"><i
+                    class="fa-solid fa-fire"></i> Replace & Migrate Team</button>
               </form>
             </div>
           </div>

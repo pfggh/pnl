@@ -4,6 +4,7 @@ window.Teams = (() => {
   const messageBox = document.getElementById("message-box-teams");
   const fixForm = document.getElementById("fix-shared-form");
   const fixInput = document.getElementById("fix-email");
+  const fixSearchBtn = document.getElementById("fix-search-btn");
   const fixBtn = document.getElementById("fix-btn");
   const fixResultsDiv = document.getElementById("fix-results");
   const pBtn = document.getElementById("p-btn");
@@ -17,8 +18,6 @@ window.Teams = (() => {
   const fixPReplaceBtn = document.getElementById("fix-p-replace-btn");
   const fixPResults = document.getElementById("fix-p-results");
 
-  let lastRequestTime = 0;
-
   // --- Helpers ---
   const showSpinner = (show = true) => {
     if (spinner) spinner.style.display = show ? "block" : "none";
@@ -29,27 +28,73 @@ window.Teams = (() => {
     messageBox.textContent = text;
     messageBox.className = "message-box " + type;
     messageBox.style.display = "block";
-    setTimeout(() => {
+  };
+
+  const clearMessage = () => {
+    if (messageBox) {
       messageBox.style.display = "none";
-    }, 5000);
+      messageBox.textContent = "";
+    }
   };
 
   // --- 1. Fix/Migrate Shared Teams (Supply pool) ---
-  const handleFix = async (e) => {
-    e.preventDefault();
 
-    const now = Date.now();
-    if (now - lastRequestTime < 10000) {
-      return showMessage("Please wait 10 seconds between requests.", "error");
-    }
-    lastRequestTime = now;
+  const renderSharedInfo = (data) => {
+    // 1. Determine Status Badge
+    const isDead = data.team.status === 'dead';
+    const statusBadge = isDead
+      ? `<span style="background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:6px; font-size:0.7em; font-weight:bold; border:1px solid #fecaca;">DEAD</span>`
+      : `<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:6px; font-size:0.7em; font-weight:bold; border:1px solid #bbf7d0;">ACTIVE</span>`;
+
+    // 2. Format Dates
+    const joinedDate = new Date(data.joined).toLocaleString();
+
+    // 4. Inject HTML
+    fixResultsDiv.innerHTML = `
+      <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); color: #1e293b; font-size: 0.95em;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;">
+            <div>
+                <div style="margin-bottom:4px;">User: <b style="color:#4f46e5;">Shared</b></div>
+                <div style="font-size:0.85em; color:#64748b;">Last invited: <b>${joinedDate}</b></div>
+            </div>
+            ${statusBadge}
+        </div>
+
+        <div style="border-top: 1px solid #f1f5f9; padding-top:15px; margin-top:5px;">
+            <div style="font-size:0.75em; color:#94a3b8; font-weight:700; text-transform:uppercase; margin-bottom:8px;">Parent Account:</div>
+            
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; align-items:center;">
+                    <span style="width:70px; font-size:0.8em; color:#64748b;">Email:</span>
+                    <code style="background:#f8fafc; padding:2px 6px; border-radius:4px; font-weight:600; font-size:0.9em; flex:1; border:1px solid #e2e8f0;">${data.team.owner_email}</code>
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <span style="width:70px; font-size:0.8em; color:#64748b;">Pass:</span>
+                    <code style="background:#f8fafc; padding:2px 6px; border-radius:4px; font-weight:600; font-size:0.9em; flex:1; border:1px solid #e2e8f0;">${data.team.owner_pass}</code>
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <span style="width:70px; font-size:0.8em; color:#64748b;">Pass email:</span>
+                    <code style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700; font-size:0.9em; flex:1; border:1px solid #bae6fd;">${data.team.owner_email_pass || "N/A"}</code>
+                </div>
+            </div>
+        </div>
+      </div>
+    `;
+    fixResultsDiv.style.display = "block";
+    if (fixBtn) fixBtn.style.display = "inline-block";
+  };
+
+  const handleFixSharedSearch = async (e) => {
+    e.preventDefault();
+    clearMessage();
 
     const email = fixInput.value.trim();
     if (!email) return showMessage("Enter an email", "error");
 
     showSpinner(true);
-    fixBtn.disabled = true;
+    fixSearchBtn.disabled = true;
     fixResultsDiv.innerHTML = "";
+    fixBtn.style.display = "none";
 
     try {
       const response = await fetch(`${window.SUPABASE_URL}/functions/v1/fix_shared`, {
@@ -58,7 +103,48 @@ window.Teams = (() => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${window.authToken}`
         },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ action: "search", email })
+      });
+
+      const json = await response.json();
+
+      if (!response.ok || json.error) {
+        throw new Error(json.error || "Unknown error");
+      }
+
+      if (json.found) {
+        renderSharedInfo(json.data);
+      } else {
+        fixResultsDiv.innerHTML = `<p style="color:#666; padding:10px;">No shared subscription found for this email.</p>`;
+        fixResultsDiv.style.display = "block";
+      }
+
+    } catch (err) {
+      console.error(err);
+      fixResultsDiv.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
+      fixResultsDiv.style.display = "block";
+    } finally {
+      showSpinner(false);
+      fixSearchBtn.disabled = false;
+    }
+  };
+
+  const handleFixSharedMigrate = async () => {
+    const email = fixInput.value.trim();
+    if (!confirm(`Are you sure you want to migrate ${email} to a fresh shared team?`)) return;
+
+    clearMessage();
+    showSpinner(true);
+    fixBtn.disabled = true;
+
+    try {
+      const response = await fetch(`${window.SUPABASE_URL}/functions/v1/fix_shared`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${window.authToken}`
+        },
+        body: JSON.stringify({ action: "migrate", email })
       });
 
       const result = await response.json();
@@ -76,19 +162,17 @@ window.Teams = (() => {
         html += `</ul>`;
         fixResultsDiv.innerHTML = html;
       } else {
-        fixResultsDiv.innerHTML = `<p>No actions were taken (maybe user not found?).</p>`;
+        fixResultsDiv.innerHTML = `<p>No actions were taken (maybe user already on a good team?).</p>`;
       }
 
     } catch (err) {
       console.error(err);
-      fixResultsDiv.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
+      showMessage(err.message, "error");
     } finally {
       showSpinner(false);
       fixBtn.disabled = false;
     }
   };
-
-
 
   // --- 3. Fix Private Workspace ---
 
@@ -97,73 +181,38 @@ window.Teams = (() => {
     // 1. Determine Status Badge
     const isDead = data.team.status === 'dead';
     const statusBadge = isDead
-      ? `<span style="background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:12px; font-size:0.75em; font-weight:bold;">DEAD</span>`
-      : `<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:12px; font-size:0.75em; font-weight:bold;">ACTIVE</span>`;
+      ? `<span style="background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:6px; font-size:0.7em; font-weight:bold; border:1px solid #fecaca;">DEAD</span>`
+      : `<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:6px; font-size:0.7em; font-weight:bold; border:1px solid #bbf7d0;">ACTIVE</span>`;
 
-    // 2. Format Dates & Duration
-    const joinedDate = new Date(data.joined).toLocaleString(); // Time invite was sent (TS)
-    const expiryDate = new Date(data.expiry).toLocaleDateString();
-
-    // 3. Calculate Days Left for visual urgency
-    const daysLeft = Math.ceil((new Date(data.expiry) - new Date()) / (1000 * 60 * 60 * 24));
-    const daysColor = daysLeft < 5 ? 'red' : 'green';
+    // 2. Format Dates
+    const joinedDate = new Date(data.joined).toLocaleString();
 
     // 4. Inject HTML
     fixPResults.innerHTML = `
-      <div style="background:white; border-radius:8px; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); overflow:hidden;">
-        
-        <div style="background:#f8fafc; padding:12px 15px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
+      <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); color: #1e293b; font-size: 0.95em;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;">
             <div>
-                <span style="font-size:0.8em; color:#64748b; font-weight:bold; letter-spacing:0.5px;">CUSTOMER</span>
-                <div style="font-weight:bold; color:#0f172a; font-size:1.1em;">${data.customer}</div>
+                <div style="margin-bottom:4px;">User: <b style="color:#ef4444;">Private</b></div>
+                <div style="font-size:0.85em; color:#64748b;">Last invited: <b>${joinedDate}</b></div>
             </div>
-            <div style="text-align:right;">
-                 <span style="font-size:0.9em; font-weight:bold; color:${daysColor}">${daysLeft} days left</span>
-            </div>
+            ${statusBadge}
         </div>
 
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0;">
+        <div style="border-top: 1px solid #f1f5f9; padding-top:15px; margin-top:5px;">
+            <div style="font-size:0.75em; color:#94a3b8; font-weight:700; text-transform:uppercase; margin-bottom:8px;">Parent Account (Owner):</div>
             
-            <div style="padding:15px; border-right:1px solid #f1f5f9;">
-                <div style="margin-bottom:10px;">
-                    <div style="font-size:0.75em; color:#94a3b8; text-transform:uppercase;">Phone Number</div>
-                    <div style="color:#334155; font-family:monospace; font-size:1.1em;">${data.phone}</div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; align-items:center;">
+                    <span style="width:70px; font-size:0.8em; color:#64748b;">Email:</span>
+                    <code style="background:#f8fafc; padding:2px 6px; border-radius:4px; font-weight:600; font-size:0.9em; flex:1; border:1px solid #e2e8f0;">${data.team.owner_email}</code>
                 </div>
-                <div style="margin-bottom:10px;">
-                    <div style="font-size:0.75em; color:#94a3b8; text-transform:uppercase;">Invite Sent (TS)</div>
-                    <div style="color:#334155; font-size:0.9em;">${joinedDate}</div>
+                <div style="display:flex; align-items:center;">
+                    <span style="width:70px; font-size:0.8em; color:#64748b;">Pass:</span>
+                    <code style="background:#f8fafc; padding:2px 6px; border-radius:4px; font-weight:600; font-size:0.9em; flex:1; border:1px solid #e2e8f0;">${data.team.owner_pass}</code>
                 </div>
-                 <div style="margin-bottom:10px;">
-                    <div style="font-size:0.75em; color:#94a3b8; text-transform:uppercase;">Duration</div>
-                    <div style="color:#334155; font-size:0.9em;">${data.duration} Month(s) (Expires: ${expiryDate})</div>
-                </div>
-            </div>
-
-            <div style="padding:15px; background:#fdfdfe;">
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                    <span style="font-size:0.75em; color:#94a3b8; text-transform:uppercase; font-weight:bold;">Workspace Owner</span>
-                    ${statusBadge}
-                </div>
-                
-                <div style="margin-bottom:8px;">
-                    <div style="font-size:0.7em; color:#64748b;">Email</div>
-                    <code style="background:#f1f5f9; padding:2px 4px; border-radius:4px; color:#0f172a; font-size:0.9em;">${data.team.owner_email}</code>
-                </div>
-
-                <div style="margin-bottom:8px;">
-                    <div style="font-size:0.7em; color:#64748b;">ChatGPT Pass</div>
-                    <code style="background:#f1f5f9; padding:2px 4px; border-radius:4px; color:#0f172a; font-size:0.9em;">${data.team.owner_pass}</code>
-                </div>
-
-                <div style="margin-bottom:12px;">
-                    <div style="font-size:0.7em; color:#64748b;">Email Pass / 2FA</div>
-                    <code style="background:#e0f2fe; color:#0369a1; padding:3px 6px; border-radius:4px; font-weight:bold; font-size:0.95em; border:1px solid #bae6fd;">
-                        ${data.team.owner_email_pass || "N/A"}
-                    </code>
-                </div>
-                
-                <div style="font-size:0.75em; color:#9ca3af; text-align:right;">
-                    Seats: <b>${data.team.seats_used}</b>/5 &bull; ID: ...${data.team.id.slice(-6)}
+                <div style="display:flex; align-items:center;">
+                    <span style="width:70px; font-size:0.8em; color:#64748b;">Pass email:</span>
+                    <code style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700; font-size:0.9em; flex:1; border:1px solid #bae6fd;">${data.team.owner_email_pass || "N/A"}</code>
                 </div>
             </div>
         </div>
@@ -178,17 +227,13 @@ window.Teams = (() => {
   // --- Search Handler ---
   const handleFixSearch = async (e) => {
     e.preventDefault();
-
-    const now = Date.now();
-    if (now - lastRequestTime < 10000) {
-      return showMessage("Please wait 10 seconds between requests.", "error");
-    }
-    lastRequestTime = now;
+    clearMessage();
 
     const email = fixPEmail.value.trim();
     if (!email) return;
 
     showSpinner(true);
+    fixPSearchBtn.disabled = true;
     fixPResults.innerHTML = "";
     fixPReplaceBtn.style.display = "none";
 
@@ -210,22 +255,18 @@ window.Teams = (() => {
       showMessage(err.message, "error");
     } finally {
       showSpinner(false);
+      fixPSearchBtn.disabled = false;
     }
   };
 
   // --- Replace Handler ---
-  // --- Robust Replace Handler ---
   const handleFixReplace = async () => {
     const email = fixPEmail.value.trim();
     if (!confirm(`Are you sure you want to KILL the current team and move ${email}?`)) return;
 
-    const now = Date.now();
-    if (now - lastRequestTime < 10000) {
-      return showMessage("Please wait 10 seconds between requests.", "error");
-    }
-    lastRequestTime = now;
-
+    clearMessage();
     showSpinner(true);
+    fixPReplaceBtn.disabled = true;
     try {
       const res = await fetch(`${window.SUPABASE_URL}/functions/v1/fix_private`, {
         method: "POST",
@@ -236,7 +277,6 @@ window.Teams = (() => {
       const json = await res.json();
 
       if (!res.ok || !json.success) {
-        // Handle Transaction Failure (Rollback happened)
         let errorMsg = json.error || "Migration Failed";
         if (json.details) {
           errorMsg += "\nDetails:\n" + json.details.map(d => `- ${d.email}: ${d.message}`).join("\n");
@@ -244,29 +284,26 @@ window.Teams = (() => {
         throw new Error(errorMsg);
       }
 
-      // Success Logic
       const failures = json.results.filter(r => !r.success);
       if (failures.length > 0) {
-        // Partial Success (Some moved, some failed invite)
         const failMsg = failures.map(f => `${f.email}: ${f.message}`).join("\n");
-        showMessage(`Migration Complete, but some invites failed:\n${failMsg}`, "warning"); // Warning, not Error
+        showMessage(`Migration Complete, but some invites failed:\n${failMsg}`, "warning");
       } else {
-        // Perfect Success
         showMessage("Team Replaced & All Invites Sent Successfully!", "success");
       }
-
-      // No auto-refresh requested: simply finish
     } catch (err) {
       console.error(err);
       alert(`❌ ERROR: \n${err.message}`);
     } finally {
       showSpinner(false);
+      fixPReplaceBtn.disabled = false;
     }
   };
 
   const init = () => {
     // Shared Fix
-    if (fixForm) fixForm.addEventListener("submit", handleFix);
+    if (fixForm) fixForm.addEventListener("submit", handleFixSharedSearch);
+    if (fixBtn) fixBtn.addEventListener("click", handleFixSharedMigrate);
 
     // Private Fix
     if (fixPForm) fixPForm.addEventListener("submit", handleFixSearch);
