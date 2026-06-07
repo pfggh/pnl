@@ -29,6 +29,27 @@ window.Subscriptions = (() => {
   const replaceBtn = document.getElementById("replace-btn");
   // ---------------------------------------
 
+  const subTableSearch = document.getElementById("sub-table-search");
+
+  const filterSubscriptionsTable = () => {
+    if (!subTableSearch) return;
+    const query = subTableSearch.value.toLowerCase().trim();
+    const rows = subscriptionTable.querySelectorAll("tr");
+    rows.forEach(tr => {
+      const cells = Array.from(tr.querySelectorAll("td"));
+      if (cells.length === 1 && cells[0].getAttribute("colspan")) {
+        return;
+      }
+      const text = cells.map(td => td.textContent.toLowerCase()).join(" ");
+      const match = text.includes(query);
+      tr.style.display = match ? "" : "none";
+    });
+  };
+
+  if (subTableSearch) {
+    subTableSearch.addEventListener("input", filterSubscriptionsTable);
+  }
+
   const subEmailLabel = subEmailInput?.closest("label") || subEmailInput;
 
   function toggleSubEmailVisibility() {
@@ -355,6 +376,196 @@ window.Subscriptions = (() => {
   }
   // --- End Anghami Cancel Modal Helpers ---
 
+  // --- Expired Private Subs Helpers ---
+  const formatDateForInput = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    const pad = (num) => String(num).padStart(2, '0');
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  const openUpdatePrivateModal = (row) => {
+    const formattedDate = formatDateForInput(row.ts);
+    modalContent.innerHTML = `
+      <div style="padding-top: 20px;">
+        <h3 style="margin-bottom: 20px; color: #fff; font-weight: 800; display: flex; align-items: center; gap: 10px;">
+          <i class="fa-solid fa-pen-to-square" style="color: var(--primary)"></i> Update Private Subscription
+        </h3>
+        <form id="update-private-form" style="display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700;">Customer Email</label>
+            <input type="text" id="update-p-email" value="${row.customer_email ?? ''}" disabled style="background: rgba(15, 23, 42, 0.4); opacity: 0.7; cursor: not-allowed;" />
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700;">Phone</label>
+            <input type="text" value="${row.phone ?? ''}" disabled style="background: rgba(15, 23, 42, 0.4); opacity: 0.7; cursor: not-allowed;" />
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700;">Team ID</label>
+            <input type="text" value="${row.team_id ?? ''}" disabled style="background: rgba(15, 23, 42, 0.4); opacity: 0.7; cursor: not-allowed;" />
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700;">Start Date</label>
+            <input type="datetime-local" id="update-p-date" value="${formattedDate}" required style="border-color: rgba(99, 102, 241, 0.4);" />
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700;">Duration (Months)</label>
+            <select id="update-p-duration" required style="border-color: rgba(99, 102, 241, 0.4);">
+              <option value="1" ${row.duration === 1 ? 'selected' : ''}>1 Month</option>
+              <option value="3" ${row.duration === 3 ? 'selected' : ''}>3 Months</option>
+              <option value="6" ${row.duration === 6 ? 'selected' : ''}>6 Months</option>
+              <option value="12" ${row.duration === 12 ? 'selected' : ''}>12 Months</option>
+            </select>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 15px;">
+            <button type="button" id="update-p-cancel" class="pill-btn" style="padding: 10px 20px;">Cancel</button>
+            <button type="submit" id="update-p-submit" class="pill-btn" style="background: var(--primary); padding: 10px 20px; border-color: var(--primary); color: #fff;">
+              <i class="fa-solid fa-save" style="color:#fff"></i> Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
+    injectCloseButton();
+    cancelModal.style.display = "flex";
+
+    document.getElementById("update-p-cancel").onclick = () => {
+      cancelModal.style.display = "none";
+    };
+
+    document.getElementById("update-private-form").onsubmit = async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("update-p-email").value;
+      const duration = parseInt(document.getElementById("update-p-duration").value, 10);
+      const dateVal = document.getElementById("update-p-date").value;
+      if (!dateVal) return alert("Please select a valid start date.");
+      const date = new Date(dateVal).toISOString();
+
+      try {
+        showSpinner(true);
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        const token = session?.access_token;
+        if (!token) throw new Error("Not authenticated.");
+
+        const res = await fetch(`${window.SUPABASE_URL}/functions/v1/cancel_private`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: "update",
+            customer_email: email,
+            duration,
+            date
+          })
+        });
+
+        const result = await res.json();
+        if (!res.ok || !result.success) throw new Error(result.error || result.message || "Failed to update subscription.");
+
+        showMessage("Subscription updated successfully.", "success");
+        cancelModal.style.display = "none";
+        
+        // Update the row locally in the table
+        const deleteBtn = subscriptionTable.querySelector(`button.delete-private-btn[data-email="${email}"]`);
+        if (deleteBtn) {
+          const tr = deleteBtn.closest("tr");
+          if (tr) {
+            const startDate = new Date(date);
+            const expiryDate = new Date(startDate);
+            expiryDate.setMonth(startDate.getMonth() + duration);
+            
+            const cells = tr.cells;
+            if (cells && cells.length >= 7) {
+              cells[4].textContent = startDate.toLocaleString();
+              cells[5].textContent = expiryDate.toLocaleString();
+              cells[6].textContent = "yes";
+              cells[6].setAttribute("style", "color:#10b981; font-weight:bold;");
+            }
+
+            const updateBtnInRow = tr.querySelector(".update-private-btn");
+            if (updateBtnInRow) {
+              const index = Number(updateBtnInRow.dataset.index);
+              if (window.expiredPrivateSubsData && window.expiredPrivateSubsData[index]) {
+                window.expiredPrivateSubsData[index].ts = date;
+                window.expiredPrivateSubsData[index].expiry = expiryDate.toISOString();
+                window.expiredPrivateSubsData[index].duration = duration;
+                window.expiredPrivateSubsData[index].confirmed_date = "yes";
+              }
+            }
+          }
+        }
+        
+        fetchDashboardKpis();
+      } catch (err) {
+        console.error(err);
+        alert("Error updating subscription: " + err.message);
+      } finally {
+        showSpinner(false);
+      }
+    };
+  };
+
+  const deletePrivateSub = (email, id) => {
+    if (!email) {
+      alert("Missing customer email for this subscription.");
+      return;
+    }
+    buildConfirmModal(
+      "Confirm Deletion",
+      `Are you sure you want to delete the private subscription for <strong>${email}</strong>? This will notify them via WhatsApp and delete all their records from the database.`,
+      async () => {
+        try {
+          showSpinner(true);
+          const { data: { session } } = await window.supabaseClient.auth.getSession();
+          const token = session?.access_token;
+          if (!token) throw new Error("Not authenticated.");
+
+          const res = await fetch(`${window.SUPABASE_URL}/functions/v1/cancel_private`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: "remove",
+              customer_email: email
+            })
+          });
+
+          const result = await res.json();
+          if (!res.ok || !result.success) throw new Error(result.error || result.message || "Failed to remove subscription.");
+
+          const sentStatus = result.notification?.sent ? "Notified via WhatsApp" : "WhatsApp failed";
+          showMessage(`Subscription deleted successfully. ${sentStatus} (${result.notification?.phone ?? ''}).`, "success");
+          
+          // Remove row locally
+          const rowToRemove = subscriptionTable.querySelector(`button.delete-private-btn[data-id="${id}"]`);
+          if (rowToRemove) {
+            rowToRemove.closest("tr")?.remove();
+          } else {
+            const altRow = subscriptionTable.querySelector(`button.delete-private-btn[data-email="${email}"]`);
+            altRow?.closest("tr")?.remove();
+          }
+          fetchDashboardKpis();
+        } catch (err) {
+          console.error(err);
+          showMessage("Error removing subscription: " + err.message, "error");
+        } finally {
+          showSpinner(false);
+        }
+      }
+    );
+  };
+  // --- End Anghami Cancel Modal Helpers ---
+
   function openModalWith(nodeHtmlOrNode) {
     modalContent.innerHTML = "";
     if (typeof nodeHtmlOrNode === "string") {
@@ -478,7 +689,11 @@ window.Subscriptions = (() => {
   });
 
   const showSpinner = (show = true) => {
-    spinner.style.display = show ? "block" : "none";
+    if (show) {
+      spinner.classList.add("active");
+    } else {
+      spinner.classList.remove("active");
+    }
   };
   const showMessage = (text, type = "success") => {
     messageBox.textContent = text;
@@ -580,19 +795,36 @@ user: ${it.user}`;
     showSpinner(true);
     clearMessage();
     try {
-      const resp = await fetch(
-        window.SUPABASE_URL + "/functions/v1/fetchpendingpayment",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${window.authToken}`,
-          },
-          body: JSON.stringify({ action: view }),
-        }
-      );
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error);
+      let data;
+      if (view === "expiredprivatesubs") {
+        const resp = await fetch(
+          window.SUPABASE_URL + "/functions/v1/cancel_private",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${window.authToken}`,
+            },
+            body: JSON.stringify({ action: "show" }),
+          }
+        );
+        data = await resp.json();
+        if (!resp.ok || !data.success) throw new Error(data.error || "Failed to fetch expired private subscriptions.");
+      } else {
+        const resp = await fetch(
+          window.SUPABASE_URL + "/functions/v1/fetchpendingpayment",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${window.authToken}`,
+            },
+            body: JSON.stringify({ action: view }),
+          }
+        );
+        data = await resp.json();
+        if (data.error) throw new Error(data.error);
+      }
 
       // Show the table and title
       subscriptionTableTitle.style.display = "block";
@@ -730,6 +962,52 @@ user: ${it.user}`;
             `);
           });
         }
+      } else if (view === "expiredprivatesubs") {
+        subscriptionTableTitle.textContent = "Expired Private Subscriptions";
+        subscriptionTableHead.innerHTML = `
+          <tr>
+            <th>ID <button class="sort-btn" data-column="0">↕️</button></th>
+            <th>Email <button class="sort-btn" data-column="1">↕️</button></th>
+            <th>Phone <button class="sort-btn" data-column="2">↕️</button></th>
+            <th>Team ID <button class="sort-btn" data-column="3">↕️</button></th>
+            <th>Start Date <button class="sort-btn" data-column="4">↕️</button></th>
+            <th>Expiry <button class="sort-btn" data-column="5">↕️</button></th>
+            <th>Confirmed <button class="sort-btn" data-column="6">↕️</button></th>
+            <th>Actions</th>
+          </tr>`;
+        const rows = data.data || [];
+        showCountBadge(`Expired Private: ${rows.length} rows`, "fa-solid fa-user-xmark");
+        subscriptionTable.innerHTML = "";
+        if (!rows.length) {
+          subscriptionTable.innerHTML = `<tr><td colspan="8" style="text-align:center;">No expired private subscriptions found.</td></tr>`;
+        } else {
+          window.expiredPrivateSubsData = rows;
+          rows.forEach((row, idx) => {
+            const startDate = row.ts ? new Date(row.ts).toLocaleString() : "";
+            const expiryDate = row.expiry ? new Date(row.expiry).toLocaleString() : "";
+            let confirmedClass = "";
+            if (row.confirmed_date === "yes") confirmedClass = "style='color:#10b981; font-weight:bold;'";
+            else if (row.confirmed_date === "no") confirmedClass = "style='color:#f59e0b; font-weight:bold;'";
+            else if (row.confirmed_date === "wrong") confirmedClass = "style='color:#ef4444; font-weight:bold;'";
+            subscriptionTable.insertAdjacentHTML("beforeend", `
+              <tr>
+                <td>${row.id ?? ""}</td>
+                <td>${row.customer_email ?? ""}</td>
+                <td>${row.phone ?? ""}</td>
+                <td>${row.team_id ?? ""}</td>
+                <td>${startDate}</td>
+                <td>${expiryDate}</td>
+                <td ${confirmedClass}>${row.confirmed_date ?? ""}</td>
+                <td>
+                  <div class="button-group" style="display:flex; gap:8px;">
+                    <button class="pill-btn update-private-btn" data-index="${idx}" style="padding:8px 12px; font-size:0.75rem; background:rgba(99, 102, 241, 0.15); border-color:var(--primary);"><i class="fa-solid fa-pen-to-square"></i> Update</button>
+                    <button class="pill-btn delete-private-btn" data-email="${row.customer_email}" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem; background:rgba(239, 68, 68, 0.15); border-color:#ef4444; color:#ef4444;"><i class="fa-solid fa-trash"></i> Delete</button>
+                  </div>
+                </td>
+              </tr>
+            `);
+          });
+        }
       } else {
         subscriptionTableTitle.textContent = "All Subscriptions";
         subscriptionTableHead.innerHTML = `
@@ -756,6 +1034,7 @@ user: ${it.user}`;
           });
         }
       }
+      filterSubscriptionsTable();
     } catch (err) {
       console.error("Error fetching data:", err);
       showMessage("Error fetching data.", "error");
@@ -796,7 +1075,16 @@ user: ${it.user}`;
       const { success, error } = await resp.json();
       if (error) throw new Error(error);
       showMessage(`Payment ${id} marked paid.`, "success");
-      fetchSubscriptionsData("pendingpayments");
+      
+      // Remove row locally
+      const rowToRemove = subscriptionTable.querySelector(`button.mark-paid-btn[data-id="${id}"]`);
+      if (rowToRemove) {
+        rowToRemove.closest("tr")?.remove();
+      } else {
+        const altRow = subscriptionTable.querySelector(`[data-id="${id}"]`);
+        altRow?.closest("tr")?.remove();
+      }
+      
       fetchDashboardKpis();
     } catch (err) {
       console.error(err);
@@ -1041,7 +1329,35 @@ password: ${newPass}
       </button>
     </div>`;
       injectCloseButton();
-      fetchSubscriptionsData(viewSelector.value);
+      // Update/remove row locally
+      const view = viewSelector.value;
+      const rowToRemove = subscriptionTable.querySelector(`[data-id="${currentPayId}"]`);
+      if (rowToRemove) {
+        if (view === "pendingrenewals" || view === "pendingpayments") {
+          rowToRemove.closest("tr")?.remove();
+        } else if (view === "subscriptions") {
+          const tr = rowToRemove.closest("tr");
+          if (tr && tr.cells && tr.cells.length >= 4) {
+            const oldDuration = parseInt(tr.cells[2].textContent, 10) || 0;
+            tr.cells[2].textContent = months === 0 ? "Lifetime" : (oldDuration + months);
+            
+            const oldExpiryText = tr.cells[3].textContent;
+            let baseDate = new Date();
+            if (oldExpiryText) {
+              const parsedDate = new Date(oldExpiryText);
+              if (!isNaN(parsedDate.getTime())) {
+                baseDate = parsedDate;
+              }
+            }
+            if (months === 0) {
+              tr.cells[3].textContent = "Lifetime";
+            } else {
+              baseDate.setMonth(baseDate.getMonth() + months);
+              tr.cells[3].textContent = baseDate.toLocaleString();
+            }
+          }
+        }
+      }
       fetchDashboardKpis();
     } catch (err) {
       console.error("Error extending subscription:", err);
@@ -1112,7 +1428,7 @@ password: ${newPass}
       }
 
       try {
-        const resp = await fetch(window.SUPABASE_URL + endpoint, {
+        let resp = await fetch(window.SUPABASE_URL + endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1120,7 +1436,28 @@ password: ${newPass}
           },
           body: JSON.stringify(body),
         });
-        const data = await resp.json();
+        let data = await resp.json();
+
+        // Handle specific "can_extend" case for addprivate (GPT Private)
+        if (svc === "gpt private" && resp.status === 400 && data.can_extend === true) {
+          if (confirm(data.error + "\n\nWould you like to migrate them to a new team to renew?")) {
+            // Retry with extend: true
+            resp = await fetch(window.SUPABASE_URL + endpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${window.authToken}`
+              },
+              body: JSON.stringify({ ...body, extend: true }),
+            });
+            data = await resp.json();
+          } else {
+            // User cancelled retry
+            showSpinner(false);
+            submitBtn.disabled = false;
+            return;
+          }
+        }
 
         if (!resp.ok || data.error) throw new Error(data.error || "Unknown error occurred");
 
@@ -1361,21 +1698,43 @@ password: ${newPass}
       });
     }
 
+    // Bind Cancel Private button
+    const cancelPrivateBtn = document.getElementById("cancel-private-btn");
+    if (cancelPrivateBtn) {
+      cancelPrivateBtn.onclick = () => openConfirmHoldModal({
+        title: "Cancel Private Subscription",
+        body: "This will call the cancelprivate function.",
+        seconds: 3,
+        onConfirm: () => doGenericTrigger("cancel-private-btn", null, "/functions/v1/cancelprivate")
+      });
+    }
+
     subscriptionTable.addEventListener("click", (e) => {
-      if (e.target.classList.contains("mark-paid-btn")) {
-        markAsPaid(e.target.dataset.id);
-      } else if (e.target.classList.contains("cancel-sub-btn")) {
-        openCancelModal(e.target.dataset.id);
-      } else if (e.target.classList.contains("placeholder2-btn")) {
-        placeholderAction2(e.target.dataset.id);
-      } else if (e.target.classList.contains("cancel-anghami-btn")) {
-        const payId = Number(e.target.dataset.id);
+      const targetBtn = e.target.closest("button");
+      if (!targetBtn) return;
+
+      if (targetBtn.classList.contains("mark-paid-btn")) {
+        markAsPaid(targetBtn.dataset.id);
+      } else if (targetBtn.classList.contains("cancel-sub-btn")) {
+        openCancelModal(targetBtn.dataset.id);
+      } else if (targetBtn.classList.contains("placeholder2-btn")) {
+        placeholderAction2(targetBtn.dataset.id);
+      } else if (targetBtn.classList.contains("cancel-anghami-btn")) {
+        const payId = Number(targetBtn.dataset.id);
         if (!payId) return showMessage("Missing pay id", "error");
         openAnghamiCancelModal(payId);
-      } else if (e.target.classList.contains("gpt-cancel-btn")) {
-        const payId = Number(e.target.dataset.id);
+      } else if (targetBtn.classList.contains("gpt-cancel-btn")) {
+        const payId = Number(targetBtn.dataset.id);
         if (!payId) return showMessage("Missing pay id", "error");
         openGptCancelModal(payId);
+      } else if (targetBtn.classList.contains("update-private-btn")) {
+        const index = Number(targetBtn.dataset.index);
+        const row = window.expiredPrivateSubsData && window.expiredPrivateSubsData[index];
+        if (row) openUpdatePrivateModal(row);
+      } else if (targetBtn.classList.contains("delete-private-btn")) {
+        const email = targetBtn.dataset.email;
+        const id = targetBtn.dataset.id;
+        deletePrivateSub(email, id);
       }
     });
 

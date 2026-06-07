@@ -70,7 +70,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // await window.Subscriptions.fetchSubscriptionsData("pendingpayments");
 
   // Sorting logic (Event delegation fix)
-  document.querySelector('.table-container').addEventListener('click', (e) => {
+  document.addEventListener('click', (e) => {
     const btn = e.target.closest('.sort-btn');
     if (!btn) return;
 
@@ -79,7 +79,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const column = parseInt(btn.getAttribute('data-column'), 10);
     const asc = btn.asc = !btn.asc;
 
-    const getCellValue = (tr, idx) => tr.children[idx].innerText || tr.children[idx].textContent;
+    const getCellValue = (tr, idx) => {
+      const cell = tr.children[idx];
+      return cell ? (cell.innerText || cell.textContent) : '';
+    };
 
     const comparer = (idx, asc) => (a, b) => ((v1, v2) =>
       v1 !== '' && v2 !== '' && !isNaN(v1) && !isNaN(v2)
@@ -91,7 +94,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       .sort(comparer(column, asc))
       .forEach(tr => tbody.appendChild(tr));
 
-    document.querySelectorAll('.sort-btn').forEach(b => b.textContent = '↕️');
+    table.querySelectorAll('.sort-btn').forEach(b => b.textContent = '↕️');
     btn.textContent = asc ? '🔼' : '🔽';
   });
   // ... (inside the document.DOMContentLoaded script context of panel.html)
@@ -166,10 +169,38 @@ document.addEventListener("DOMContentLoaded", async () => {
       document.getElementById("extend-close").onclick = () => {
         cancelModal.style.display = "none";
       };
-      // Refresh the data to reflect changes in the table
+      // Update/remove row locally
       const viewSelector = document.getElementById("view-selector");
-      if (viewSelector && viewSelector.value) {
-        window.Subscriptions.fetchSubscriptionsData(viewSelector.value);
+      const view = viewSelector ? viewSelector.value : "";
+      const subscriptionTable = document.getElementById("subscription-table")?.querySelector("tbody");
+      if (subscriptionTable) {
+        const rowToRemove = subscriptionTable.querySelector(`[data-id="${currentPayId}"]`);
+        if (rowToRemove) {
+          if (view === "pendingrenewals" || view === "pendingpayments") {
+            rowToRemove.closest("tr")?.remove();
+          } else if (view === "subscriptions") {
+            const tr = rowToRemove.closest("tr");
+            if (tr && tr.cells && tr.cells.length >= 4) {
+              const oldDuration = parseInt(tr.cells[2].textContent, 10) || 0;
+              tr.cells[2].textContent = monthsValue === 0 ? "Lifetime" : (oldDuration + monthsValue);
+              
+              const oldExpiryText = tr.cells[3].textContent;
+              let baseDate = new Date();
+              if (oldExpiryText) {
+                const parsedDate = new Date(oldExpiryText);
+                if (!isNaN(parsedDate.getTime())) {
+                  baseDate = parsedDate;
+                }
+              }
+              if (monthsValue === 0) {
+                tr.cells[3].textContent = "Lifetime";
+              } else {
+                baseDate.setMonth(baseDate.getMonth() + monthsValue);
+                tr.cells[3].textContent = baseDate.toLocaleString();
+              }
+            }
+          }
+        }
       }
     } catch (err) {
       console.error("Error extending subscription:", err);

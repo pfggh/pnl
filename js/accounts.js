@@ -20,6 +20,27 @@ window.Accounts = (() => {
   const anghamiLinksDiv = document.getElementById("anghami-links");
   const linkInputs = anghamiLinksDiv.querySelectorAll("input");
 
+  const accTableSearch = document.getElementById("acc-table-search");
+
+  const filterAccountsTable = () => {
+    if (!accTableSearch) return;
+    const query = accTableSearch.value.toLowerCase().trim();
+    const rows = accountsIssuesTableBody.querySelectorAll("tr");
+    rows.forEach(tr => {
+      const cells = Array.from(tr.querySelectorAll("td"));
+      if (cells.length === 1 && cells[0].getAttribute("colspan")) {
+        return;
+      }
+      const text = cells.map(td => td.textContent.toLowerCase()).join(" ");
+      const match = text.includes(query);
+      tr.style.display = match ? "" : "none";
+    });
+  };
+
+  if (accTableSearch) {
+    accTableSearch.addEventListener("input", filterAccountsTable);
+  }
+
   // Helper functions for UI feedback
   const showSpinnerAccs = (show = true) => {
     spinnerAccs.style.display = show ? "block" : "none";
@@ -69,7 +90,22 @@ window.Accounts = (() => {
       if (json.error) throw new Error(json.error);
       if (json.success) {
         showMessageAccs(`Issue #${id} marked as fixed!`, "success");
-        fetchAccountsOrIssues(accountsViewSelector.value);
+        
+        const view = accountsViewSelector.value;
+        const btn = accountsIssuesTableBody.querySelector(`button.mark-fixed-btn[data-id="${id}"]`);
+        if (btn) {
+          if (view === "fetchunfixed") {
+            // Remove the row since we are viewing unsolved issues
+            btn.closest("tr")?.remove();
+          } else if (view === "fetchissues") {
+            // For all issues view, update solved column to Yes and clear the action cell
+            const tr = btn.closest("tr");
+            if (tr && tr.cells && tr.cells.length >= 5) {
+              tr.cells[2].textContent = "Yes";
+              tr.cells[4].innerHTML = "";
+            }
+          }
+        }
       }
     } catch (err) {
       console.error("Error marking issue as fixed:", err);
@@ -96,7 +132,11 @@ window.Accounts = (() => {
       if (json.error) throw new Error(json.error);
       if (json.success) {
         showMessageAccs(`Account ${email} deleted!`, "success");
-        fetchAccountsOrIssues(accountsViewSelector.value);
+        
+        const btn = accountsIssuesTableBody.querySelector(`button.delete-acc-btn[data-email="${email}"]`);
+        if (btn) {
+          btn.closest("tr")?.remove();
+        }
       }
     } catch (err) {
       console.error("Error deleting account:", err);
@@ -130,9 +170,9 @@ window.Accounts = (() => {
         const accs = json.accs || [];
         accountsIssuesTableHead.innerHTML = `
             <tr>
-              <th>Email</th>
-              <th>Password</th>
-              <th>Uses</th>
+              <th>Email <button class="sort-btn" data-column="0">↕️</button></th>
+              <th>Password <button class="sort-btn" data-column="1">↕️</button></th>
+              <th>Uses <button class="sort-btn" data-column="2">↕️</button></th>
             </tr>`;
         if (accs.length === 0) {
           const tr = document.createElement("tr");
@@ -156,10 +196,10 @@ window.Accounts = (() => {
         const issues = json[dataKey] || [];
         accountsIssuesTableHead.innerHTML = `
             <tr>
-              <th>ID</th>
-              <th>Acc Email</th>
-              <th>Solved?</th>
-              <th>Used</th>
+              <th>ID <button class="sort-btn" data-column="0">↕️</button></th>
+              <th>Acc Email <button class="sort-btn" data-column="1">↕️</button></th>
+              <th>Solved? <button class="sort-btn" data-column="2">↕️</button></th>
+              <th>Used <button class="sort-btn" data-column="3">↕️</button></th>
               <th>Action</th>
             </tr>`;
         if (issues.length === 0) {
@@ -188,6 +228,7 @@ window.Accounts = (() => {
           });
         }
       }
+      filterAccountsTable();
     } catch (err) {
       console.error("Error fetching data:", err);
       showMessageAccs("Error fetching data.", "error");

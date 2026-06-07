@@ -37,51 +37,100 @@ window.Teams = (() => {
     }
   };
 
+  const KENDEV_TOKEN = "mcg__xCCjEvfwLnhYFNZ5ptTOxM6Gxwygw98pZCAFCEFM6xkH5_mGXxg-uQOk_Q6Z86U";
+
+  const fetchKendevDetails = async (id) => {
+    try {
+      const targetUrl = `https://kendev.id.vn/api/v2/teams/${id}`;
+      // Using corsproxy.io to bypass browser CORS restrictions
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+      
+      const response = await fetch(proxyUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${KENDEV_TOKEN}`,
+          "Content-Type": "application/json"
+        }
+      });
+      const json = await response.json();
+      // Since it's a proxy, we check the body status
+      if (!response.ok || (json && json.ok === false)) throw new Error(json?.error || "Kendev error");
+      return json.data;
+    } catch (err) {
+      console.error("Kendev Proxy Fetch error:", err);
+      return null;
+    }
+  };
+
   // --- 1. Fix/Migrate Shared Teams (Supply pool) ---
 
-  const renderSharedInfo = (data) => {
-    // 1. Determine Status Badge
-    const isDead = data.team.status === 'dead';
-    const statusBadge = isDead
-      ? `<span style="background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:6px; font-size:0.7em; font-weight:bold; border:1px solid #fecaca;">DEAD</span>`
-      : `<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:6px; font-size:0.7em; font-weight:bold; border:1px solid #bbf7d0;">ACTIVE</span>`;
+  const renderSharedInfo = (data, kendevData, email) => {
+    // If fresh Kendev fetch failed (CORS), fallback to data already in Supabase DB
+    const source = kendevData || data.team;
+    const isStaleFallback = !kendevData;
 
     // 2. Format Dates
-    const joinedDate = new Date(data.joined).toLocaleString();
+    const createdAt = source.createdAt ? new Date(source.createdAt).toLocaleString() : 'N/A';
+    const tokenStatus = (source.tokenStatus || 'N/A').toLowerCase();
+    const syncStatus = (source.syncStatus || 'N/A').toLowerCase();
+    const teamId = source.id || 'N/A';
+
+    // Status Badge
+    const statusBadge = tokenStatus === 'active'
+      ? `<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:6px; font-size:0.75em; font-weight:bold; border:1px solid #bbf7d0;">ACTIVE</span>`
+      : `<span style="background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:6px; font-size:0.75em; font-weight:bold; border:1px solid #fecaca;">${tokenStatus.toUpperCase()}</span>`;
 
     // 4. Inject HTML
     fixResultsDiv.innerHTML = `
       <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); color: #1e293b; font-size: 0.95em;">
+        ${isStaleFallback ? `<div style="background:#fff7ed; color:#9a3412; border:1px solid #ffedd5; padding:10px; border-radius:8px; font-size:0.8em; margin-bottom:15px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-triangle-exclamation"></i> Kendev API (CORS) Blocked. Showing database fallback.</div>` : ''}
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;">
             <div>
                 <div style="margin-bottom:4px;">User: <b style="color:#4f46e5;">Shared</b></div>
-                <div style="font-size:0.85em; color:#64748b;">Last invited: <b>${joinedDate}</b></div>
+                <div style="font-size:0.85em; color:#64748b;">Email: <b>${email}</b></div>
             </div>
             ${statusBadge}
         </div>
 
         <div style="border-top: 1px solid #f1f5f9; padding-top:15px; margin-top:5px;">
-            <div style="font-size:0.75em; color:#94a3b8; font-weight:700; text-transform:uppercase; margin-bottom:8px;">Parent Account:</div>
-            
+            <div style="font-size:0.75em; color:#94a3b8; font-weight:700; text-transform:uppercase; margin-bottom:8px;">Workspace Details:</div>
             <div style="display:flex; flex-direction:column; gap:8px;">
                 <div style="display:flex; align-items:center;">
-                    <span style="width:70px; font-size:0.8em; color:#64748b;">Email:</span>
-                    <code style="background:#f8fafc; padding:2px 6px; border-radius:4px; font-weight:600; font-size:0.9em; flex:1; border:1px solid #e2e8f0;">${data.team.owner_email}</code>
+                    <span style="width:100px; font-size:0.8em; color:#64748b;">ID:</span>
+                    <code style="font-size:0.85em; color: #475569;">${teamId}</code>
                 </div>
                 <div style="display:flex; align-items:center;">
-                    <span style="width:70px; font-size:0.8em; color:#64748b;">Pass:</span>
-                    <code style="background:#f8fafc; padding:2px 6px; border-radius:4px; font-weight:600; font-size:0.9em; flex:1; border:1px solid #e2e8f0;">${data.team.owner_pass}</code>
+                    <span style="width:100px; font-size:0.8em; color:#64748b;">Added At:</span>
+                    <span style="font-size:0.85em;">${createdAt}</span>
                 </div>
                 <div style="display:flex; align-items:center;">
-                    <span style="width:70px; font-size:0.8em; color:#64748b;">Pass email:</span>
-                    <code style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700; font-size:0.9em; flex:1; border:1px solid #bae6fd;">${data.team.owner_email_pass || "N/A"}</code>
+                    <span style="width:100px; font-size:0.8em; color:#64748b;">Token Status:</span>
+                    <span style="font-size:0.85em; font-weight:700; color:${tokenStatus === 'active' ? '#16a34a' : '#ef4444'}">${tokenStatus.toUpperCase()}</span>
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <span style="width:100px; font-size:0.8em; color:#64748b;">Sync Status:</span>
+                    <span style="font-size:0.85em; font-weight:700; color:${syncStatus === 'active' ? '#16a34a' : '#ef4444'}">${syncStatus.toUpperCase()}</span>
                 </div>
             </div>
         </div>
       </div>
     `;
     fixResultsDiv.style.display = "block";
-    if (fixBtn) fixBtn.style.display = "inline-block";
+
+    if (fixBtn) {
+      if (tokenStatus === 'active') {
+        fixBtn.disabled = true;
+        fixBtn.style.opacity = "0.6";
+        fixBtn.style.cursor = "not-allowed";
+        fixBtn.innerHTML = `<i class="fa-solid fa-circle-info"></i> cannot replace team is active`;
+      } else {
+        fixBtn.disabled = false;
+        fixBtn.style.opacity = "1";
+        fixBtn.style.cursor = "pointer";
+        fixBtn.innerHTML = `<i class="fa-solid fa-rocket"></i> Migrate User`;
+      }
+      fixBtn.style.display = "inline-block";
+    }
   };
 
   const handleFixSharedSearch = async (e) => {
@@ -113,7 +162,9 @@ window.Teams = (() => {
       }
 
       if (json.found) {
-        renderSharedInfo(json.data);
+        const kendevData = await fetchKendevDetails(json.data.team.id);
+        // If fetchKendevDetails fails (e.g. CORS), we still render using data from DB
+        renderSharedInfo(json.data, kendevData, email);
       } else {
         fixResultsDiv.innerHTML = `<p style="color:#666; padding:10px;">No shared subscription found for this email.</p>`;
         fixResultsDiv.style.display = "block";
@@ -177,42 +228,52 @@ window.Teams = (() => {
   // --- 3. Fix Private Workspace ---
 
   // --- Render Stylish Search Result ---
-  const renderPrivateInfo = (data) => {
-    // 1. Determine Status Badge
-    const isDead = data.team.status === 'dead';
-    const statusBadge = isDead
-      ? `<span style="background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:6px; font-size:0.7em; font-weight:bold; border:1px solid #fecaca;">DEAD</span>`
-      : `<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:6px; font-size:0.7em; font-weight:bold; border:1px solid #bbf7d0;">ACTIVE</span>`;
+  const renderPrivateInfo = (data, kendevData, email) => {
+    // If fresh Kendev fetch failed (CORS), fallback to data already in Supabase DB
+    const source = kendevData || data.team;
+    const isStaleFallback = !kendevData;
 
     // 2. Format Dates
-    const joinedDate = new Date(data.joined).toLocaleString();
+    const createdAt = source.createdAt ? new Date(source.createdAt).toLocaleString() : 'N/A';
+    const tokenStatus = (source.tokenStatus || 'N/A').toLowerCase();
+    const syncStatus = (source.syncStatus || 'N/A').toLowerCase();
+    const teamId = source.id || 'N/A';
+
+    // Status Badge
+    const statusBadge = tokenStatus === 'active'
+      ? `<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:6px; font-size:0.75em; font-weight:bold; border:1px solid #bbf7d0;">ACTIVE</span>`
+      : `<span style="background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:6px; font-size:0.75em; font-weight:bold; border:1px solid #fecaca;">${tokenStatus.toUpperCase()}</span>`;
 
     // 4. Inject HTML
     fixPResults.innerHTML = `
       <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); color: #1e293b; font-size: 0.95em;">
+        ${isStaleFallback ? `<div style="background:#fff7ed; color:#9a3412; border:1px solid #ffedd5; padding:10px; border-radius:8px; font-size:0.8em; margin-bottom:15px; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-triangle-exclamation"></i> Kendev API (CORS) Blocked. Showing database fallback.</div>` : ''}
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;">
             <div>
                 <div style="margin-bottom:4px;">User: <b style="color:#ef4444;">Private</b></div>
-                <div style="font-size:0.85em; color:#64748b;">Last invited: <b>${joinedDate}</b></div>
+                <div style="font-size:0.85em; color:#64748b;">Email: <b>${email}</b></div>
             </div>
             ${statusBadge}
         </div>
 
         <div style="border-top: 1px solid #f1f5f9; padding-top:15px; margin-top:5px;">
-            <div style="font-size:0.75em; color:#94a3b8; font-weight:700; text-transform:uppercase; margin-bottom:8px;">Parent Account (Owner):</div>
-            
+            <div style="font-size:0.75em; color:#94a3b8; font-weight:700; text-transform:uppercase; margin-bottom:8px;">Workspace Details:</div>
             <div style="display:flex; flex-direction:column; gap:8px;">
                 <div style="display:flex; align-items:center;">
-                    <span style="width:70px; font-size:0.8em; color:#64748b;">Email:</span>
-                    <code style="background:#f8fafc; padding:2px 6px; border-radius:4px; font-weight:600; font-size:0.9em; flex:1; border:1px solid #e2e8f0;">${data.team.owner_email}</code>
+                    <span style="width:100px; font-size:0.8em; color:#64748b;">ID:</span>
+                    <code style="font-size:0.85em; color: #475569;">${teamId}</code>
                 </div>
                 <div style="display:flex; align-items:center;">
-                    <span style="width:70px; font-size:0.8em; color:#64748b;">Pass:</span>
-                    <code style="background:#f8fafc; padding:2px 6px; border-radius:4px; font-weight:600; font-size:0.9em; flex:1; border:1px solid #e2e8f0;">${data.team.owner_pass}</code>
+                    <span style="width:100px; font-size:0.8em; color:#64748b;">Added At:</span>
+                    <span style="font-size:0.85em;">${createdAt}</span>
                 </div>
                 <div style="display:flex; align-items:center;">
-                    <span style="width:70px; font-size:0.8em; color:#64748b;">Pass email:</span>
-                    <code style="background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; font-weight:700; font-size:0.9em; flex:1; border:1px solid #bae6fd;">${data.team.owner_email_pass || "N/A"}</code>
+                    <span style="width:100px; font-size:0.8em; color:#64748b;">Token Status:</span>
+                    <span style="font-size:0.85em; font-weight:700; color:${tokenStatus === 'active' ? '#16a34a' : '#ef4444'}">${tokenStatus.toUpperCase()}</span>
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <span style="width:100px; font-size:0.8em; color:#64748b;">Sync Status:</span>
+                    <span style="font-size:0.85em; font-weight:700; color:${syncStatus === 'active' ? '#16a34a' : '#ef4444'}">${syncStatus.toUpperCase()}</span>
                 </div>
             </div>
         </div>
@@ -220,8 +281,20 @@ window.Teams = (() => {
     `;
     fixPResults.style.display = "block";
 
-    // Ensure the Replace button is visible if a result is found
-    if (fixPReplaceBtn) fixPReplaceBtn.style.display = "inline-block";
+    if (fixPReplaceBtn) {
+      if (tokenStatus === 'active') {
+        fixPReplaceBtn.disabled = true;
+        fixPReplaceBtn.style.opacity = "0.6";
+        fixPReplaceBtn.style.cursor = "not-allowed";
+        fixPReplaceBtn.innerHTML = `<i class="fa-solid fa-circle-info"></i> cannot replace team is active`;
+      } else {
+        fixPReplaceBtn.disabled = false;
+        fixPReplaceBtn.style.opacity = "1";
+        fixPReplaceBtn.style.cursor = "pointer";
+        fixPReplaceBtn.innerHTML = `<i class="fa-solid fa-fire"></i> Replace & Migrate Team`;
+      }
+      fixPReplaceBtn.style.display = "inline-block";
+    }
   };
 
   // --- Search Handler ---
@@ -246,7 +319,9 @@ window.Teams = (() => {
       const json = await res.json();
 
       if (json.found) {
-        renderPrivateInfo(json.data);
+        const kendevData = await fetchKendevDetails(json.data.team.id);
+        // If fetchKendevDetails fails (e.g. CORS), we still render using data from DB
+        renderPrivateInfo(json.data, kendevData, email);
       } else {
         fixPResults.innerHTML = `<p style="color:#666; padding:10px;">No private subscription found for this email.</p>`;
         fixPResults.style.display = "block";
@@ -278,6 +353,12 @@ window.Teams = (() => {
 
       if (!res.ok || !json.success) {
         let errorMsg = json.error || "Migration Failed";
+        
+        // Suggest full extension if expired or near expiry
+        if (errorMsg.toLowerCase().includes("expired") || errorMsg.toLowerCase().includes("near expiry")) {
+          errorMsg = "⚠️ This user is expired or near expiry.\n'Fixing' their seat wastes a fresh team slot.\n\nACTION: Please use the 'Add Private' button on the main dashboard to perform a full extension.";
+        }
+
         if (json.details) {
           errorMsg += "\nDetails:\n" + json.details.map(d => `- ${d.email}: ${d.message}`).join("\n");
         }
