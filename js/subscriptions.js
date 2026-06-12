@@ -758,16 +758,8 @@ window.Subscriptions = (() => {
           if (subTitle) subTitle.style.display = "none";
 
           reactMsg.innerHTML = `
-            <div style="margin-top: 10px; padding: 18px; background: rgba(99, 102, 241, 0.08); border-left: 4px solid var(--primary); border-radius: var(--radius-md); text-align: left;">
-              <p style="color: #10b981; font-weight: 800; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-circle-check"></i> Reassigned Successfully!
-              </p>
-              <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 15px;">
-                <strong>Old Email:</strong> ${result.old_accemail || "N/A"}<br/>
-                <strong>New Email:</strong> ${result.new_accemail || "N/A"}<br/>
-                <strong>Expiry:</strong> ${formattedExpiry}
-              </div>
-              <button id="copy-replace-link-btn" class="copy-btn" style="width: 100%; justify-content: center; font-weight: 700; gap: 8px; padding: 12px 18px; border-radius: 12px;">
+            <div style="margin-top: 10px;">
+              <button id="copy-replace-link-btn" class="copy-btn" style="width: 100%; justify-content: center; font-weight: 700; gap: 8px; padding: 12px 18px; border-radius: 12px; background: var(--primary); color: #fff; border: none; cursor: pointer;">
                 <i class="fa-regular fa-copy"></i> Copy Invite Link
               </button>
             </div>
@@ -775,9 +767,36 @@ window.Subscriptions = (() => {
 
           const copyBtn = document.getElementById("copy-replace-link-btn");
           if (copyBtn) {
-            copyBtn.onclick = async () => {
-              await navigator.clipboard.writeText(result.link || "");
-              showMessage("Copied invite link to clipboard!", "success");
+            copyBtn.onclick = () => {
+              const textToCopy = result.link || "";
+              if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                  showMessage("Copied invite link to clipboard!", "success");
+                }).catch(() => {
+                  fallbackCopy(textToCopy);
+                });
+              } else {
+                fallbackCopy(textToCopy);
+              }
+            };
+            
+            const fallbackCopy = (text) => {
+              const textArea = document.createElement("textarea");
+              textArea.value = text;
+              textArea.style.position = "fixed";
+              textArea.style.left = "-999999px";
+              textArea.style.top = "-999999px";
+              document.body.appendChild(textArea);
+              textArea.focus();
+              textArea.select();
+              try {
+                document.execCommand('copy');
+                showMessage("Copied invite link to clipboard!", "success");
+              } catch (err) {
+                console.error('Fallback copy failed', err);
+                showMessage("Failed to copy link", "error");
+              }
+              textArea.remove();
             };
           }
 
