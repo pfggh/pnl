@@ -182,9 +182,9 @@ window.Accounts = (() => {
           accs.forEach((row) => {
             const tr = document.createElement("tr");
             tr.innerHTML = `
-                <td>${row.email}</td>
-                <td>${row.pass || ""}</td>
-                <td>${row.uses ?? 0}</td>`;
+                <td data-label="Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.email || ''}'); showMessageAccs('Copied email!', 'success')">${row.email}</span></td>
+                <td data-label="Password"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.pass || ''}'); showMessageAccs('Copied password!', 'success')">${row.pass || ""}</span></td>
+                <td data-label="Uses">${row.uses ?? 0}</td>`;
             accountsIssuesTableBody.appendChild(tr);
           });
         }
@@ -212,18 +212,18 @@ window.Accounts = (() => {
             let actionBtnHtml = "";
             if (row.used === 1) {
               // If account was used (issue fixed), allow marking as fixed
-              actionBtnHtml = `<button class="mark-fixed-btn" data-id="${row.id}">Mark as Fixed</button>`;
+              actionBtnHtml = `<button class="btn-table-action btn-success mark-fixed-btn" data-id="${row.id}"><i class="fa-solid fa-check"></i> Mark as Fixed</button>`;
             } else {
               // If account not used, allow deletion
-              actionBtnHtml = `<button class="delete-acc-btn" data-email="${row.accemail}">Delete Account</button>`;
+              actionBtnHtml = `<button class="btn-table-action btn-delete delete-acc-btn" data-email="${row.accemail}"><i class="fa-solid fa-trash"></i> Delete Account</button>`;
             }
             const tr = document.createElement("tr");
             tr.innerHTML = `
-                <td>${row.id}</td>
-                <td>${row.accemail}</td>
-                <td>${solvedText}</td>
-                <td>${row.used}</td>
-                <td>${actionBtnHtml}</td>`;
+                <td data-label="ID">${row.id}</td>
+                <td data-label="Acc Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.accemail || ''}'); showMessageAccs('Copied email!', 'success')">${row.accemail}</span></td>
+                <td data-label="Solved?">${solvedText}</td>
+                <td data-label="Used">${row.used}</td>
+                <td data-label="Action">${actionBtnHtml}</td>`;
             accountsIssuesTableBody.appendChild(tr);
           });
         }

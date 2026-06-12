@@ -31,6 +31,18 @@ window.Subscriptions = (() => {
 
   const subTableSearch = document.getElementById("sub-table-search");
 
+  const formatCompactDate = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hr = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${y}-${m}-${day} ${hr}:${min}`;
+  };
+
   const filterSubscriptionsTable = () => {
     if (!subTableSearch) return;
     const query = subTableSearch.value.toLowerCase().trim();
@@ -484,8 +496,8 @@ window.Subscriptions = (() => {
             
             const cells = tr.cells;
             if (cells && cells.length >= 7) {
-              cells[4].textContent = startDate.toLocaleString();
-              cells[5].textContent = expiryDate.toLocaleString();
+              cells[4].textContent = formatCompactDate(startDate);
+              cells[5].textContent = formatCompactDate(expiryDate);
               cells[6].textContent = "yes";
               cells[6].setAttribute("style", "color:#10b981; font-weight:bold;");
             }
@@ -647,22 +659,50 @@ window.Subscriptions = (() => {
       searchBtn.onclick = async () => {
         subSelect.style.display = "none";
         reactBtn.style.display = "none";
-        reactMsg.textContent = "";
+        reactMsg.innerHTML = "";
         const phone = searchInput.value.trim().replace(/\s+/g, "");
-        if (!phone) return reactMsg.textContent = "Enter a phone number";
-        const res = await fetch(`${window.SUPABASE_URL}/functions/v1/gpt_search_by_phone`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${window.authToken}` },
-          body: JSON.stringify({ phone })
-        });
-        const list = await res.json();
-        lastSubList = Array.isArray(list) ? list : [];
-        if (!lastSubList.length) return reactMsg.textContent = "No subscriptions found";
-        subSelect.innerHTML = lastSubList.map((s, idx) =>
-          `<option value="${idx}">${s.accemail} (signed ${new Date(s.ts).toLocaleString()})</option>`
-        ).join("");
-        subSelect.style.display = "inline-block";
-        reactBtn.style.display = "inline-block";
+        if (!phone) {
+          reactMsg.innerHTML = `<span style="color:#ef4444;">Enter a phone number</span>`;
+          return;
+        }
+
+        searchBtn.disabled = true;
+        const oldText = searchBtn.innerHTML;
+        searchBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i>`;
+
+        try {
+          const res = await fetch(`${window.SUPABASE_URL}/functions/v1/replace_gpt`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${window.authToken}`
+            },
+            body: JSON.stringify({ phone })
+          });
+
+          if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+          const data = await res.json();
+          lastSubList = Array.isArray(data.matches) ? data.matches : [];
+
+          if (!lastSubList.length) {
+            reactMsg.innerHTML = `<span style="color:#f59e0b;">No active subscriptions found</span>`;
+            return;
+          }
+
+          subSelect.innerHTML = lastSubList.map((s, idx) => {
+            const exp = s.expiry ? formatCompactDate(s.expiry) : "No expiry";
+            return `<option value="${idx}">${s.accemail} (Exp: ${exp})</option>`;
+          }).join("");
+
+          subSelect.style.display = "inline-block";
+          reactBtn.style.display = "inline-block";
+        } catch (err) {
+          console.error(err);
+          reactMsg.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}</span>`;
+        } finally {
+          searchBtn.disabled = false;
+          searchBtn.innerHTML = oldText;
+        }
       };
 
       reactBtn.onclick = async () => {
@@ -670,19 +710,83 @@ window.Subscriptions = (() => {
         if (selectedIdx === "" || !lastSubList[selectedIdx]) return;
         const sub_id = lastSubList[selectedIdx].sub_id || lastSubList[selectedIdx].id;
         if (!sub_id) {
-          reactMsg.textContent = "Error: Could not determine subscription ID.";
+          reactMsg.innerHTML = `<span style="color:#ef4444;">Error: Could not determine subscription ID.</span>`;
           return;
         }
-        const res = await fetch(`${window.SUPABASE_URL}/functions/v1/override_gpt_code`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${window.authToken}` },
-          body: JSON.stringify({ id: sub_id })
-        });
-        if (res.ok) {
-          reactMsg.textContent = "✅ Reactivated—next code will forward.";
-        } else {
-          const err = await res.text();
-          reactMsg.textContent = "Error: " + err;
+
+        reactBtn.disabled = true;
+        const oldBtnText = reactBtn.innerHTML;
+        reactBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i> Replacing...`;
+        reactMsg.innerHTML = "";
+
+        try {
+          const res = await fetch(`${window.SUPABASE_URL}/functions/v1/replace_gpt`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${window.authToken}`
+            },
+            body: JSON.stringify({ sub_id })
+          });
+
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(errorText || `HTTP Error ${res.status}`);
+          }
+
+          const result = await res.json();
+          if (result.error) throw new Error(result.error);
+
+          let formattedExpiry = "N/A";
+          if (result.expiry) {
+            const expiryDate = new Date(result.expiry);
+            if (!isNaN(expiryDate.getTime())) {
+              formattedExpiry = expiryDate.toLocaleDateString('en-GB', {
+                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+              });
+            } else {
+              formattedExpiry = result.expiry;
+            }
+          }
+
+          subSelect.style.display = "none";
+          reactBtn.style.display = "none";
+
+          const searchContainer = document.getElementById("gpt-search-container");
+          if (searchContainer) searchContainer.style.display = "none";
+          const subTitle = document.getElementById("gpt-replace-sub-title");
+          if (subTitle) subTitle.style.display = "none";
+
+          reactMsg.innerHTML = `
+            <div style="margin-top: 10px; padding: 18px; background: rgba(99, 102, 241, 0.08); border-left: 4px solid var(--primary); border-radius: var(--radius-md); text-align: left;">
+              <p style="color: #10b981; font-weight: 800; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-circle-check"></i> Reassigned Successfully!
+              </p>
+              <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 15px;">
+                <strong>Old Email:</strong> ${result.old_accemail || "N/A"}<br/>
+                <strong>New Email:</strong> ${result.new_accemail || "N/A"}<br/>
+                <strong>Expiry:</strong> ${formattedExpiry}
+              </div>
+              <button id="copy-replace-link-btn" class="copy-btn" style="width: 100%; justify-content: center; font-weight: 700; gap: 8px; padding: 12px 18px; border-radius: 12px;">
+                <i class="fa-regular fa-copy"></i> Copy Invite Link
+              </button>
+            </div>
+          `;
+
+          const copyBtn = document.getElementById("copy-replace-link-btn");
+          if (copyBtn) {
+            copyBtn.onclick = async () => {
+              await navigator.clipboard.writeText(result.link || "");
+              showMessage("Copied invite link to clipboard!", "success");
+            };
+          }
+
+        } catch (err) {
+          console.error(err);
+          reactMsg.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}</span>`;
+        } finally {
+          reactBtn.disabled = false;
+          reactBtn.innerHTML = oldBtnText;
         }
       };
     }
@@ -851,13 +955,14 @@ user: ${it.user}`;
         } else {
           pending.forEach((row) => {
             const tr = document.createElement("tr");
+            const ts = row.timestamp ? formatCompactDate(row.timestamp) : "";
             tr.innerHTML = `
-              <td>${row.phone}</td>
-              <td>${row.accemail}</td>
-              <td>${row.amount}</td>
-              <td>${row.sub}</td>
-              <td>${row.timestamp ? new Date(row.timestamp).toLocaleString() : ""}</td>
-              <td><button class="pill-btn mark-paid-btn" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem;"><i class="fa-solid fa-check"></i> Mark as Paid</button></td>`;
+              <td data-label="Phone"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.phone}'); showMessage('Copied phone number!', 'success')">${row.phone}</span></td>
+              <td data-label="Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.accemail}'); showMessage('Copied email!', 'success')">${row.accemail}</span></td>
+              <td data-label="Amount">${row.amount}</td>
+              <td data-label="Subscription">${row.sub}</td>
+              <td data-label="Timestamp">${ts}</td>
+              <td data-label="Action"><button class="btn-table-action btn-success mark-paid-btn" data-id="${row.id}"><i class="fa-solid fa-check"></i> Mark as Paid</button></td>`;
             subscriptionTable.appendChild(tr);
           });
         }
@@ -880,17 +985,18 @@ user: ${it.user}`;
         } else {
           pendingRenewals.forEach((row) => {
             const tr = document.createElement("tr");
+            const ts = row.timestamp ? formatCompactDate(row.timestamp) : "";
             tr.innerHTML = `
-              <td>${row.id ?? ""}</td>
-              <td>${row.timestamp ? new Date(row.timestamp).toLocaleString() : ""}</td>
-              <td>${row.phone ?? ""}</td>
-              <td>${row.duration ?? ""}</td>
-              <td>${row.accemail ?? ""}</td>
-              <td>${row.paid}</td>
-              <td>
+              <td data-label="ID">${row.id ?? ""}</td>
+              <td data-label="Timestamp">${ts}</td>
+              <td data-label="Phone"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.phone || ''}'); showMessage('Copied phone number!', 'success')">${row.phone ?? ""}</span></td>
+              <td data-label="Duration">${row.duration ?? ""}</td>
+              <td data-label="Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.accemail || ''}'); showMessage('Copied email!', 'success')">${row.accemail ?? ""}</span></td>
+              <td data-label="Paid">${row.paid}</td>
+              <td data-label="Actions">
                 <div class="button-group" style="display:flex; gap:8px;">
-                  <button class="pill-btn cancel-sub-btn" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem;"><i class="fa-solid fa-xmark"></i> Cancel</button>
-                  <button class="pill-btn placeholder2-btn" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem;"><i class="fa-solid fa-calendar-plus"></i> Renew</button>
+                  <button class="btn-table-action btn-delete cancel-sub-btn" data-id="${row.id}"><i class="fa-solid fa-xmark"></i> Cancel</button>
+                  <button class="btn-table-action btn-update placeholder2-btn" data-id="${row.id}"><i class="fa-solid fa-calendar-plus"></i> Renew</button>
                 </div>
               </td>`;
             subscriptionTable.appendChild(tr);
@@ -915,16 +1021,16 @@ user: ${it.user}`;
           subscriptionTable.innerHTML = `<tr><td colspan="7" style="text-align:center;">No unpaid Anghami renewals.</td></tr>`;
         } else {
           rows.forEach(row => {
-            const ts = row.timestamp ? new Date(row.timestamp).toLocaleString() : "";
+            const ts = row.timestamp ? formatCompactDate(row.timestamp) : "";
             subscriptionTable.insertAdjacentHTML("beforeend", `
               <tr>
-                <td>${row.id ?? ""}</td>
-                <td>${ts}</td>
-                <td>${row.phone ?? ""}</td>
-                <td>${row.duration ?? ""}</td>
-                <td>${row.accemail ?? ""}</td>
-                <td>${row.paid ?? ""}</td>
-                <td><button class="pill-btn cancel-anghami-btn" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem;"><i class="fa-solid fa-xmark"></i> Cancel</button></td>
+                <td data-label="ID">${row.id ?? ""}</td>
+                <td data-label="Timestamp">${ts}</td>
+                <td data-label="Phone"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.phone || ''}'); showMessage('Copied phone number!', 'success')">${row.phone ?? ""}</span></td>
+                <td data-label="Duration">${row.duration ?? ""}</td>
+                <td data-label="Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.accemail || ''}'); showMessage('Copied email!', 'success')">${row.accemail ?? ""}</span></td>
+                <td data-label="Paid">${row.paid ?? ""}</td>
+                <td data-label="Actions"><button class="btn-table-action btn-delete cancel-anghami-btn" data-id="${row.id}"><i class="fa-solid fa-xmark"></i> Cancel</button></td>
               </tr>
             `);
           });
@@ -948,16 +1054,16 @@ user: ${it.user}`;
           subscriptionTable.innerHTML = `<tr><td colspan="7" style="text-align:center;">No unpaid GPT renewals.</td></tr>`;
         } else {
           rows.forEach(row => {
-            const ts = row.timestamp ? new Date(row.timestamp).toLocaleString() : "";
+            const ts = row.timestamp ? formatCompactDate(row.timestamp) : "";
             subscriptionTable.insertAdjacentHTML("beforeend", `
               <tr>
-                <td>${row.id ?? ""}</td>
-                <td>${ts}</td>
-                <td>${row.phone ?? ""}</td>
-                <td>${row.duration ?? ""}</td>
-                <td>${row.accemail ?? ""}</td>
-                <td>${row.paid ?? ""}</td>
-                <td><button class="pill-btn gpt-cancel-btn" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem;"><i class="fa-solid fa-xmark"></i> Cancel</button></td>
+                <td data-label="ID">${row.id ?? ""}</td>
+                <td data-label="Timestamp">${ts}</td>
+                <td data-label="Phone"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.phone || ''}'); showMessage('Copied phone number!', 'success')">${row.phone ?? ""}</span></td>
+                <td data-label="Duration">${row.duration ?? ""}</td>
+                <td data-label="Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.accemail || ''}'); showMessage('Copied email!', 'success')">${row.accemail ?? ""}</span></td>
+                <td data-label="Paid">${row.paid ?? ""}</td>
+                <td data-label="Actions"><button class="btn-table-action btn-delete gpt-cancel-btn" data-id="${row.id}"><i class="fa-solid fa-xmark"></i> Cancel</button></td>
               </tr>
             `);
           });
@@ -983,25 +1089,25 @@ user: ${it.user}`;
         } else {
           window.expiredPrivateSubsData = rows;
           rows.forEach((row, idx) => {
-            const startDate = row.ts ? new Date(row.ts).toLocaleString() : "";
-            const expiryDate = row.expiry ? new Date(row.expiry).toLocaleString() : "";
+            const startDate = row.ts ? formatCompactDate(row.ts) : "";
+            const expiryDate = row.expiry ? formatCompactDate(row.expiry) : "";
             let confirmedClass = "";
             if (row.confirmed_date === "yes") confirmedClass = "style='color:#10b981; font-weight:bold;'";
             else if (row.confirmed_date === "no") confirmedClass = "style='color:#f59e0b; font-weight:bold;'";
             else if (row.confirmed_date === "wrong") confirmedClass = "style='color:#ef4444; font-weight:bold;'";
             subscriptionTable.insertAdjacentHTML("beforeend", `
               <tr>
-                <td>${row.id ?? ""}</td>
-                <td>${row.customer_email ?? ""}</td>
-                <td>${row.phone ?? ""}</td>
-                <td>${row.team_id ?? ""}</td>
-                <td>${startDate}</td>
-                <td>${expiryDate}</td>
-                <td ${confirmedClass}>${row.confirmed_date ?? ""}</td>
-                <td>
+                <td data-label="ID">${row.id ?? ""}</td>
+                <td data-label="Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.customer_email || ''}'); showMessage('Copied email!', 'success')">${row.customer_email ?? ""}</span></td>
+                <td data-label="Phone"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.phone || ''}'); showMessage('Copied phone number!', 'success')">${row.phone ?? ""}</span></td>
+                <td data-label="Team ID"><code class="code-pill" title="Click to copy" onclick="navigator.clipboard.writeText('${row.team_id || ''}'); showMessage('Copied Team ID!', 'success')">${row.team_id ?? ""}</code></td>
+                <td data-label="Start Date">${startDate}</td>
+                <td data-label="Expiry">${expiryDate}</td>
+                <td data-label="Confirmed" ${confirmedClass}>${row.confirmed_date ?? ""}</td>
+                <td data-label="Actions">
                   <div class="button-group" style="display:flex; gap:8px;">
-                    <button class="pill-btn update-private-btn" data-index="${idx}" style="padding:8px 12px; font-size:0.75rem; background:rgba(99, 102, 241, 0.15); border-color:var(--primary);"><i class="fa-solid fa-pen-to-square"></i> Update</button>
-                    <button class="pill-btn delete-private-btn" data-email="${row.customer_email}" data-id="${row.id}" style="padding:8px 12px; font-size:0.75rem; background:rgba(239, 68, 68, 0.15); border-color:#ef4444; color:#ef4444;"><i class="fa-solid fa-trash"></i> Delete</button>
+                    <button class="btn-table-action btn-update update-private-btn" data-index="${idx}"><i class="fa-solid fa-pen-to-square"></i> Update</button>
+                    <button class="btn-table-action btn-delete delete-private-btn" data-email="${row.customer_email}" data-id="${row.id}"><i class="fa-solid fa-trash"></i> Delete</button>
                   </div>
                 </td>
               </tr>
@@ -1023,13 +1129,13 @@ user: ${it.user}`;
           subscriptionTable.innerHTML = `<tr><td colspan="4" style="text-align:center;">No subscriptions found.</td></tr>`;
         } else {
           subs.forEach((row) => {
-            const expiry = row.expiry ? new Date(row.expiry).toLocaleString() : "";
+            const expiry = row.expiry ? formatCompactDate(row.expiry) : "";
             const tr = document.createElement("tr");
             tr.innerHTML = `
-              <td>${row.phone}</td>
-              <td>${row.accemail}</td>
-              <td>${row.duration}</td>
-              <td>${expiry}</td>`;
+              <td data-label="Phone"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.phone || ''}'); showMessage('Copied phone number!', 'success')">${row.phone ?? ""}</span></td>
+              <td data-label="Acc Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.accemail || ''}'); showMessage('Copied email!', 'success')">${row.accemail ?? ""}</span></td>
+              <td data-label="Duration">${row.duration}</td>
+              <td data-label="Expiry">${expiry}</td>`;
             subscriptionTable.appendChild(tr);
           });
         }
@@ -1353,7 +1459,7 @@ password: ${newPass}
               tr.cells[3].textContent = "Lifetime";
             } else {
               baseDate.setMonth(baseDate.getMonth() + months);
-              tr.cells[3].textContent = baseDate.toLocaleString();
+              tr.cells[3].textContent = formatCompactDate(baseDate);
             }
           }
         }
@@ -1485,9 +1591,13 @@ password: ${newPass}
           let expiryString;
           if (data.expiry) {
             const expiryDate = new Date(data.expiry);
-            expiryString = expiryDate.toLocaleDateString('en-GB', {
-              weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-            });
+            if (!isNaN(expiryDate.getTime())) {
+              expiryString = expiryDate.toLocaleDateString('en-GB', {
+                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+              });
+            } else {
+              expiryString = data.expiry;
+            }
           } else {
             const expiryDate = new Date();
             expiryDate.setMonth(expiryDate.getMonth() + duration);
@@ -1496,12 +1606,15 @@ password: ${newPass}
             });
           }
           const btn = document.createElement("button");
-          btn.textContent = "Copy ChatGPT Info";
+          btn.className = "copy-btn";
+          btn.style.marginTop = "10px";
+          btn.style.display = "inline-flex";
+          btn.innerHTML = `<i class="fa-regular fa-copy"></i> Copy ChatGPT Info`;
           btn.onclick = async () => {
             await navigator.clipboard.writeText(
-              `*email*: ${data.email}\n*password*: ${data.pass}\n*expiry*: ${expiryString}\n\n- when prompted for a code, click "try another method" then select email\n\nplease send code within 15 mins to receive it automatically`
+              `*link*: ${data.link || ""}\n*expiry*: ${expiryString}`
             );
-            showMessage("Copied!", "success");
+            showMessage("Copied ChatGPT info!", "success");
           };
           messageBox.appendChild(btn);
         } else if (svc === "canva") {
@@ -1589,6 +1702,23 @@ password: ${newPass}
     const reactivateTpl = document.getElementById("reactivate-modal-template");
     if (openReactivateBtn && reactivateTpl) {
       openReactivateBtn.addEventListener("click", () => {
+        // Reset the template state before displaying it
+        const phoneInput = document.getElementById("reactivate-phone");
+        if (phoneInput) phoneInput.value = "";
+        const subSelect = document.getElementById("reactivate-sub-select");
+        if (subSelect) {
+          subSelect.style.display = "none";
+          subSelect.innerHTML = "";
+        }
+        const reactBtn = document.getElementById("reactivate-btn");
+        if (reactBtn) reactBtn.style.display = "none";
+        const reactMsg = document.getElementById("reactivate-msg");
+        if (reactMsg) reactMsg.innerHTML = "";
+        const searchContainer = document.getElementById("gpt-search-container");
+        if (searchContainer) searchContainer.style.display = "flex";
+        const subTitle = document.getElementById("gpt-replace-sub-title");
+        if (subTitle) subTitle.style.display = "block";
+
         reactivateTpl.style.display = "block";
         openModalWith(reactivateTpl);
       });

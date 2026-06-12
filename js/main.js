@@ -196,7 +196,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 tr.cells[3].textContent = "Lifetime";
               } else {
                 baseDate.setMonth(baseDate.getMonth() + monthsValue);
-                tr.cells[3].textContent = baseDate.toLocaleString();
+                const y = baseDate.getFullYear();
+                const m = String(baseDate.getMonth() + 1).padStart(2, '0');
+                const dVal = String(baseDate.getDate()).padStart(2, '0');
+                const hr = String(baseDate.getHours()).padStart(2, '0');
+                const min = String(baseDate.getMinutes()).padStart(2, '0');
+                tr.cells[3].textContent = `${y}-${m}-${dVal} ${hr}:${min}`;
               }
             }
           }

@@ -105,7 +105,7 @@
           <div class="panel-container">
             <h2 class="section-title"><i class="fa-solid fa-screwdriver-wrench"></i> Management Tools</h2>
             <div class="actions-row">
-              <button id="open-reactivate-modal" class="pill-btn"><i class="fa-solid fa-bolt"></i> Reactivate
+              <button id="open-reactivate-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace
                 GPT</button>
               <button id="open-replace-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace
                 Netflix</button>
@@ -119,12 +119,13 @@
           </div>
         </div>
 
-        <!-- Hidden modal templates (Reactivate GPT + Replace Netflix) -->
+        <!-- Hidden modal templates (Replace GPT + Replace Netflix) -->
         <div id="reactivate-modal-template" style="display:none">
-          <h3><i class="fa-solid fa-bolt" style="color:var(--primary)"></i> Reactivate GPT Code</h3>
-          <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:15px;">Search by phone number to
-            reactivate a subscription's forwarding code.</p>
-          <div style="display:flex; gap:10px; margin-bottom:15px;">
+          <h3 id="gpt-replace-title"><i class="fa-solid fa-rotate" style="color:var(--primary)"></i> Replace GPT
+            Subscription</h3>
+          <p id="gpt-replace-sub-title" style="color:var(--text-muted); font-size:0.85rem; margin-bottom:15px;">Search
+            by phone number to reassign subscription to a new GPT link.</p>
+          <div id="gpt-search-container" style="display:flex; gap:10px; margin-bottom:15px;">
             <input type="text" id="reactivate-phone" placeholder="Enter phone..." style="flex:1" />
             <button id="reactivate-search-btn" class="pill-btn" style="background:var(--primary); padding:10px 20px;"><i
                 class="fa-solid fa-magnifying-glass" style="color:#fff"></i> Search</button>
@@ -132,8 +133,8 @@
           <select id="reactivate-sub-select" style="display:none; width:100%; margin-bottom:15px;"></select>
           <button id="reactivate-btn" class="pill-btn"
             style="display:none; width:100%; background:var(--primary); justify-content:center;"><i
-              class="fa-solid fa-bolt" style="color:#fff"></i> Reactivate Now</button>
-          <div id="reactivate-msg" style="margin-top:15px; text-align:center; font-weight:700;"></div>
+              class="fa-solid fa-rotate" style="color:#fff"></i> Replace Now</button>
+          <div id="reactivate-msg" style="margin-top:15px; text-align:center;"></div>
         </div>
 
         <div id="replace-modal-template" style="display:none">
@@ -152,7 +153,8 @@
 
         <!-- Subscriptions Table and Filter -->
         <h2 class="section-title">View:</h2>
-        <div class="select-container" style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
+        <div class="select-container"
+          style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
           <select id="view-selector" style="flex: 1; min-width: 200px; margin-bottom: 0;">
             <option value="" selected disabled>Select a View...</option>
             <option value="pendingpayments">Pending Payments</option>
@@ -163,7 +165,8 @@
             <option value="unpaidgpt">GPT Renewal (Unpaid)</option>
             <option value="expiredprivatesubs">Expired Private Subs</option>
           </select>
-          <input type="text" id="sub-table-search" placeholder="Search table..." style="flex: 2; min-width: 250px; margin: 0;" />
+          <input type="text" id="sub-table-search" placeholder="Search table..."
+            style="flex: 2; min-width: 250px; margin: 0;" />
         </div>
         <h2 class="section-title" id="subscription-table-title" style="display:none;">Pending Payments</h2>
         <div id="count-badge-area" style="margin-top:10px;"></div>
@@ -216,13 +219,15 @@
         </div>
 
         <h2 class="section-title">Views</h2>
-        <div class="select-container" style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
+        <div class="select-container"
+          style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
           <select id="accounts-view-selector" style="flex: 1; min-width: 200px; margin-bottom: 0;">
             <option value="fetchissues">All Issues</option>
             <option value="fetchunfixed">Unsolved Issues</option>
             <option value="accs" selected>All Accounts</option>
           </select>
-          <input type="text" id="acc-table-search" placeholder="Search accounts/issues..." style="flex: 2; min-width: 250px; margin: 0;" />
+          <input type="text" id="acc-table-search" placeholder="Search accounts/issues..."
+            style="flex: 2; min-width: 250px; margin: 0;" />
         </div>
         <h2 class="section-title" id="accounts-issues-title">Current View</h2>
         <div class="table-container">
