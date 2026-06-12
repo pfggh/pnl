@@ -758,9 +758,10 @@ window.Subscriptions = (() => {
           if (subTitle) subTitle.style.display = "none";
 
           reactMsg.innerHTML = `
+            <div style="margin-top: 10px; background: rgba(15, 23, 42, 0.6); padding: 15px; border-radius: 12px; border: 1px solid var(--border); text-align: left; white-space: pre-wrap; font-family: monospace; font-size: 0.9rem; color: #f8fafc; margin-bottom: 15px;">${result.message || ""}</div>
             <div style="margin-top: 10px;">
               <button id="copy-replace-link-btn" class="copy-btn" style="width: 100%; justify-content: center; font-weight: 700; gap: 8px; padding: 12px 18px; border-radius: 12px; background: var(--primary); color: #fff; border: none; cursor: pointer;">
-                <i class="fa-regular fa-copy"></i> Copy Invite Link
+                <i class="fa-regular fa-copy"></i> Copy Message
               </button>
             </div>
           `;
@@ -768,10 +769,10 @@ window.Subscriptions = (() => {
           const copyBtn = document.getElementById("copy-replace-link-btn");
           if (copyBtn) {
             copyBtn.onclick = () => {
-              const textToCopy = result.link || "";
+              const textToCopy = result.message || result.link || "";
               if (navigator.clipboard && window.isSecureContext) {
                 navigator.clipboard.writeText(textToCopy).then(() => {
-                  showMessage("Copied invite link to clipboard!", "success");
+                  showMessage("Copied message to clipboard!", "success");
                 }).catch(() => {
                   fallbackCopy(textToCopy);
                 });
@@ -791,10 +792,10 @@ window.Subscriptions = (() => {
               textArea.select();
               try {
                 document.execCommand('copy');
-                showMessage("Copied invite link to clipboard!", "success");
+                showMessage("Copied message to clipboard!", "success");
               } catch (err) {
                 console.error('Fallback copy failed', err);
-                showMessage("Failed to copy link", "error");
+                showMessage("Failed to copy message", "error");
               }
               textArea.remove();
             };
