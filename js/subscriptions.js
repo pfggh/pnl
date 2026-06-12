@@ -225,15 +225,18 @@ window.Subscriptions = (() => {
       // Bind modal actions with a single handler (avoid multiplying listeners)
       modalContent.onclick = async (e) => {
         const t = e.target;
+        const btn = t.classList.contains("copy-btn") ? t : t.closest(".copy-btn");
         if (t.id === "close-modal-btn") {
           cancelModal.style.display = "none";
-        } else if (t.classList.contains("copy-btn")) {
-          const v = t.dataset.value || "";
-          try {
-            await navigator.clipboard.writeText(v);
-            showMessage("Copied to clipboard.", "success");
-          } catch {
-            showMessage("Copy failed.", "error");
+        } else if (btn) {
+          const v = btn.dataset.value;
+          if (v !== undefined && v !== null) {
+            try {
+              await navigator.clipboard.writeText(v);
+              showMessage("Copied to clipboard.", "success");
+            } catch {
+              showMessage("Copy failed.", "error");
+            }
           }
         } else if (t.id === "gpt-cancel-confirm") {
           await confirmGptCancel(currentGptPayId);
@@ -760,15 +763,16 @@ window.Subscriptions = (() => {
           reactMsg.innerHTML = `
             <div style="margin-top: 10px; background: rgba(15, 23, 42, 0.6); padding: 15px; border-radius: 12px; border: 1px solid var(--border); text-align: left; white-space: pre-wrap; font-family: monospace; font-size: 0.9rem; color: #f8fafc; margin-bottom: 15px;">${result.message || ""}</div>
             <div style="margin-top: 10px;">
-              <button id="copy-replace-link-btn" class="copy-btn" style="width: 100%; justify-content: center; font-weight: 700; gap: 8px; padding: 12px 18px; border-radius: 12px; background: var(--primary); color: #fff; border: none; cursor: pointer;">
-                <i class="fa-regular fa-copy"></i> Copy Message
+              <button id="copy-replace-link-btn" class="copy-btn" data-value="${result.message || result.link || ""}" style="width: 100%; justify-content: center; font-weight: 700; gap: 8px; padding: 12px 18px; border-radius: 12px; background: var(--primary); color: #fff; border: none; cursor: pointer;">
+                <i class="fa-regular fa-copy" style="pointer-events: none;"></i> Copy Message
               </button>
             </div>
           `;
 
           const copyBtn = document.getElementById("copy-replace-link-btn");
           if (copyBtn) {
-            copyBtn.onclick = () => {
+            copyBtn.onclick = (e) => {
+              if (e) e.stopPropagation();
               const textToCopy = result.message || result.link || "";
               if (navigator.clipboard && window.isSecureContext) {
                 navigator.clipboard.writeText(textToCopy).then(() => {
@@ -1929,9 +1933,13 @@ password: ${newPass}
     }
 
     modalContent.addEventListener("click", async (e) => {
-      if (e.target.classList.contains("copy-btn")) {
-        navigator.clipboard.writeText(e.target.dataset.value);
-        showMessage("Copied!", "success");
+      const btn = e.target.classList.contains("copy-btn") ? e.target : e.target.closest(".copy-btn");
+      if (btn) {
+        const val = btn.dataset.value;
+        if (val !== undefined && val !== null) {
+          navigator.clipboard.writeText(val);
+          showMessage("Copied!", "success");
+        }
       }
       if (e.target.id === "copy-message-btn") {
         const msgText = document.getElementById("copy-msg")?.value;
