@@ -612,8 +612,6 @@ window.Subscriptions = (() => {
   const kpiEls = {
     anghami: document.getElementById("kpi-anghami"),
     chatgpt: document.getElementById("kpi-chatgpt"),
-    private_seats: document.getElementById("kpi-private-seats"),
-    unpaid: document.getElementById("kpi-unpaid"),
     orders: document.getElementById("kpi-orders"),
   };
   async function fetchDashboardKpis() {
@@ -631,8 +629,6 @@ window.Subscriptions = (() => {
 
       kpiEls.anghami.textContent = j.anghami_spots ?? 0;
       kpiEls.chatgpt.textContent = j.chatgpt_spots ?? 0;
-      kpiEls.private_seats.textContent = j.private_seats ?? 0;
-      kpiEls.unpaid.textContent = j.unpaid ?? 0;
       kpiEls.orders.textContent = j.orders_24h ?? 0;
     } catch (e) {
       console.error("KPI error:", e);
@@ -816,6 +812,160 @@ window.Subscriptions = (() => {
     }
   });
 
+  document.addEventListener("DOMContentLoaded", () => {
+    const searchInput = document.getElementById("reactivate-link-input");
+    const searchBtn = document.getElementById("reactivate-link-search-btn");
+    const subSelect = document.getElementById("reactivate-link-sub-select");
+    const reactBtn = document.getElementById("reactivate-link-btn");
+    const reactMsg = document.getElementById("reactivate-link-msg");
+
+    let lastMatchList = [];
+    let currentSearchType = ""; // "phone" or "link"
+
+    if (searchBtn && searchInput && subSelect && reactBtn && reactMsg) {
+      searchBtn.onclick = async () => {
+        subSelect.style.display = "none";
+        reactBtn.style.display = "none";
+        reactMsg.innerHTML = "";
+        const val = searchInput.value.trim();
+        if (!val) {
+          reactMsg.innerHTML = `<span style="color:#ef4444;">Enter a phone number or link</span>`;
+          return;
+        }
+
+        searchBtn.disabled = true;
+        const oldText = searchBtn.innerHTML;
+        searchBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i>`;
+
+        let payload = {};
+        if (val.includes("http") || val.includes("?id=")) {
+          payload = { link: val };
+        } else {
+          payload = { phone: val };
+        }
+
+        try {
+          const res = await fetch(`${window.SUPABASE_URL}/functions/v1/reactivate_link`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${window.authToken}`
+            },
+            body: JSON.stringify(payload)
+          });
+
+          if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+
+          lastMatchList = Array.isArray(data.matches) ? data.matches : [];
+          currentSearchType = data.type || "";
+
+          if (!lastMatchList.length) {
+            reactMsg.innerHTML = `<span style="color:#f59e0b;">No matching records found</span>`;
+            return;
+          }
+
+          subSelect.innerHTML = lastMatchList.map((m, idx) => {
+            if (currentSearchType === "phone") {
+              const exp = m.expiry ? formatCompactDate(m.expiry) : "No expiry";
+              return `<option value="${idx}">Email: ${m.accemail} (Exp: ${exp})</option>`;
+            } else {
+              const added = m.last_link ? formatCompactDate(m.last_link) : "N/A";
+              return `<option value="${idx}">Email: ${m.email} (Last Link: ${added})</option>`;
+            }
+          }).join("");
+
+          subSelect.style.display = "inline-block";
+          reactBtn.style.display = "flex";
+        } catch (err) {
+          console.error(err);
+          reactMsg.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}</span>`;
+        } finally {
+          searchBtn.disabled = false;
+          searchBtn.innerHTML = oldText;
+        }
+      };
+
+      reactBtn.onclick = async () => {
+        const selectedIdx = subSelect.value;
+        if (selectedIdx === "" || !lastMatchList[selectedIdx]) return;
+        
+        let payload = {};
+        if (currentSearchType === "phone") {
+          const sub_id = lastMatchList[selectedIdx].sub_id || lastMatchList[selectedIdx].id;
+          if (!sub_id) {
+            reactMsg.innerHTML = `<span style="color:#ef4444;">Error: Could not determine subscription ID.</span>`;
+            return;
+          }
+          payload = { sub_id };
+        } else {
+          const secret_id = lastMatchList[selectedIdx].secret_id;
+          if (!secret_id) {
+            reactMsg.innerHTML = `<span style="color:#ef4444;">Error: Could not determine secret ID.</span>`;
+            return;
+          }
+          payload = { secret_id };
+        }
+
+        reactBtn.disabled = true;
+        const oldBtnText = reactBtn.innerHTML;
+        reactBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i> Reactivating...`;
+        reactMsg.innerHTML = "";
+
+        try {
+          const res = await fetch(`${window.SUPABASE_URL}/functions/v1/reactivate_link`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${window.authToken}`
+            },
+            body: JSON.stringify(payload)
+          });
+
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(errorText || `HTTP Error ${res.status}`);
+          }
+
+          const result = await res.json();
+          if (result.error) throw new Error(result.error);
+
+          subSelect.style.display = "none";
+          reactBtn.style.display = "none";
+
+          const searchContainer = document.getElementById("link-search-container");
+          if (searchContainer) searchContainer.style.display = "none";
+          const subTitle = document.getElementById("link-reactivate-sub-title");
+          if (subTitle) subTitle.style.display = "none";
+
+          reactMsg.innerHTML = `
+            <div style="margin-top: 10px; background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 12px; border: 1px solid #10b981; text-align: left; font-size: 0.95rem; color: #10b981; margin-bottom: 15px;">
+              <i class="fa-solid fa-circle-check"></i> ${result.message || "Successfully reactivated!"}
+            </div>
+            <div style="display:flex;justify-content:center;margin-top:16px">
+              <button id="close-reactivate-link-btn" class="btn-primary" style="background:#10b981; border-color:#10b981;">Close</button>
+            </div>
+          `;
+
+          const closeBtn = document.getElementById("close-reactivate-link-btn");
+          if (closeBtn) {
+            closeBtn.onclick = () => {
+              cancelModal.style.display = "none";
+            };
+          }
+
+        } catch (err) {
+          console.error(err);
+          reactMsg.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}</span>`;
+        } finally {
+          reactBtn.disabled = false;
+          reactBtn.innerHTML = oldBtnText;
+        }
+      };
+    }
+  });
+
   const showSpinner = (show = true) => {
     if (show) {
       spinner.classList.add("active");
@@ -856,36 +1006,7 @@ window.Subscriptions = (() => {
     }
   };
 
-  async function confirmSubmitModal() {
-    return new Promise((resolve) => {
-      const x = document.getElementById("modal-close-btn");
-      if (x) x.style.display = "none";
-      modalContent.innerHTML = `
-        <div style="text-align:center; padding:12px 8px;">
-          <h3 style="margin:0 0 12px 0">7OTELO LABEL</h3>
-          <div style="display:flex; gap:12px; justify-content:center; margin-top:8px;">
-            <button id="submit-cancel-btn">cancel</button>
-            <button id="submit-continue-btn" class="btn-primary">continue</button>
-          </div>
-        </div>
-      `;
-      cancelModal.style.display = "flex";
 
-      const cleanup = () => {
-        cancelModal.style.display = "none";
-        if (x) x.style.display = "";
-      };
-
-      document.getElementById("submit-cancel-btn").onclick = () => {
-        cleanup();
-        resolve(false);
-      };
-      document.getElementById("submit-continue-btn").onclick = () => {
-        cleanup();
-        resolve(true);
-      };
-    });
-  }
   function buildReplaceModalList(items) {
     const rows = items.map((it, idx) => {
       const msg = `Hello! your new login details are:
@@ -1511,8 +1632,7 @@ password: ${newPass}
     );
     adminForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const confirmed = await confirmSubmitModal();
-      if (!confirmed) return;
+
       clearMessage();
       showSpinner(true);
       submitBtn.disabled = true;
@@ -1520,7 +1640,7 @@ password: ${newPass}
       let phone = sanitizeInput(document.getElementById("phone").value);
       phone = sanitizePhone(phone);
       const duration = parseInt(sanitizeInput(document.getElementById("duration").value), 10);
-      const paid = document.getElementById("paid").value === "true";
+      const paid = true;
       const service = serviceSelector.value;
       const username = sanitizeInput(usernameInput.value);
 
@@ -1745,6 +1865,31 @@ password: ${newPass}
 
         reactivateTpl.style.display = "block";
         openModalWith(reactivateTpl);
+      });
+    }
+
+    const openReactivateLinkBtn = document.getElementById("open-reactivate-link-modal");
+    const reactivateLinkTpl = document.getElementById("reactivate-link-modal-template");
+    if (openReactivateLinkBtn && reactivateLinkTpl) {
+      openReactivateLinkBtn.addEventListener("click", () => {
+        const linkInput = document.getElementById("reactivate-link-input");
+        if (linkInput) linkInput.value = "";
+        const subSelect = document.getElementById("reactivate-link-sub-select");
+        if (subSelect) {
+          subSelect.style.display = "none";
+          subSelect.innerHTML = "";
+        }
+        const reactBtn = document.getElementById("reactivate-link-btn");
+        if (reactBtn) reactBtn.style.display = "none";
+        const reactMsg = document.getElementById("reactivate-link-msg");
+        if (reactMsg) reactMsg.innerHTML = "";
+        const searchContainer = document.getElementById("link-search-container");
+        if (searchContainer) searchContainer.style.display = "flex";
+        const subTitle = document.getElementById("link-reactivate-sub-title");
+        if (subTitle) subTitle.style.display = "block";
+
+        reactivateLinkTpl.style.display = "block";
+        openModalWith(reactivateLinkTpl);
       });
     }
 

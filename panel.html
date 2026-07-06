@@ -52,14 +52,7 @@
             <span class="kpi-label"><i class="fa-solid fa-robot" style="color: #6366f1;"></i> GPT Ready</span>
             <span class="kpi-value" id="kpi-chatgpt">—</span>
           </div>
-          <div class="kpi-card">
-            <span class="kpi-label"><i class="fa-solid fa-gem" style="color: #f43f5e;"></i> Private Seats</span>
-            <span class="kpi-value" id="kpi-private-seats">—</span>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-label"><i class="fa-solid fa-credit-card" style="color: #f59e0b;"></i> Unpaid Orders</span>
-            <span class="kpi-value" id="kpi-unpaid">—</span>
-          </div>
+
           <div class="kpi-card">
             <span class="kpi-label"><i class="fa-solid fa-box" style="color: #8b5cf6;"></i> Orders 24h</span>
             <span class="kpi-value" id="kpi-orders">—</span>
@@ -92,10 +85,7 @@
                   <option value="12">12 Months</option>
                 </datalist>
               </div>
-              <select id="paid">
-                <option value="true">Paid ✅</option>
-                <option value="false" selected>Not Paid ❌</option>
-              </select>
+
               <button type="submit" id="submit-btn" style="width: 100%;">
                 <i class="fa-solid fa-wand-magic-sparkles"></i> Create Subscription
               </button>
@@ -107,6 +97,8 @@
             <div class="actions-row">
               <button id="open-reactivate-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace
                 GPT</button>
+              <button id="open-reactivate-link-modal" class="pill-btn" style="background:#10b981; border-color:#10b981; color:#fff"><i class="fa-solid fa-link"></i> Reactivate
+                Link</button>
               <button id="open-replace-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace
                 Netflix</button>
               <button id="trigger-renewals-btn" class="pill-btn"><i class="fa-solid fa-plus"></i> Add NF Renew</button>
@@ -149,6 +141,18 @@
           <small style="opacity:.6; display:block; margin-top:10px; text-align:center;">
             All active subs migrate to the new account. Expired subs are removed.
           </small>
+        </div>
+
+        <div id="reactivate-link-modal-template" style="display:none">
+          <h3 id="link-reactivate-title"><i class="fa-solid fa-link" style="color:#10b981"></i> Reactivate Link</h3>
+          <p id="link-reactivate-sub-title" style="color:var(--text-muted); font-size:0.85rem; margin-bottom:15px;">Search by phone or link to reactivate a link.</p>
+          <div id="link-search-container" style="display:flex; gap:10px; margin-bottom:15px;">
+            <input type="text" id="reactivate-link-input" placeholder="Enter phone or link..." style="flex:1" />
+            <button id="reactivate-link-search-btn" class="pill-btn" style="background:#10b981; padding:10px 20px;"><i class="fa-solid fa-magnifying-glass" style="color:#fff"></i> Search</button>
+          </div>
+          <select id="reactivate-link-sub-select" style="display:none; width:100%; margin-bottom:15px;"></select>
+          <button id="reactivate-link-btn" class="pill-btn" style="display:none; width:100%; background:#10b981; justify-content:center;"><i class="fa-solid fa-bolt" style="color:#fff"></i> Reactivate</button>
+          <div id="reactivate-link-msg" style="margin-top:15px; text-align:center;"></div>
         </div>
 
         <!-- Subscriptions Table and Filter -->
