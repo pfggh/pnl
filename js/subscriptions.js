@@ -336,6 +336,7 @@ window.Subscriptions = (() => {
           <input id="anghami-new-invite" placeholder="Paste new invite link here..." style="width:100%;margin-bottom:20px;" />
           <div style="display:flex;justify-content:center;gap:12px;">
             <button id="anghami-confirm" class="pill-btn" style="background:var(--primary)"><i class="fa-solid fa-check" style="color:#fff"></i> Update & Delete</button>
+            <button id="anghami-modal-skip" class="pill-btn btn-hold-skip" style="margin:0;"><i class="fa-solid fa-forward"></i> Hold to Skip</button>
           </div>
         </div>
       `;
@@ -346,6 +347,13 @@ window.Subscriptions = (() => {
         if (!confirm("Confirm update invite & delete subscription?")) return;
         await confirmAnghamiUpdateDelete(currentAnghamiPayId, newInvite);
       };
+
+      const modalSkipBtn = document.getElementById("anghami-modal-skip");
+      if (modalSkipBtn) {
+        bindHoldToSkip(modalSkipBtn, () => {
+          skipAnghamiSubscription(currentAnghamiPayId);
+        });
+      }
     } catch (e) {
       console.error(e);
       showMessage(`Error: ${e.message}`, "error");
@@ -385,6 +393,90 @@ window.Subscriptions = (() => {
       console.error(e);
       showMessage(`Error: ${e.message}`, "error");
       cancelModal.style.display = "none";
+    } finally {
+      showSpinner(false);
+    }
+  }
+
+  const bindHoldToSkip = (button, onConfirm) => {
+    let t = null;
+    let elapsed = 0;
+    const total = 1500; // 1.5 seconds hold
+    const stepMs = 50;
+
+    let progress = button.querySelector(".hold-progress");
+    if (!progress) {
+      progress = document.createElement("span");
+      progress.className = "hold-progress";
+      button.appendChild(progress);
+    }
+
+    const start = (e) => {
+      if (e) e.preventDefault();
+      if (t) return;
+      button.classList.add("holding");
+      t = setInterval(() => {
+        elapsed += stepMs;
+        const pct = Math.min(100, (elapsed / total) * 100);
+        progress.style.width = pct + "%";
+        if (elapsed >= total) {
+          clearInterval(t);
+          t = null;
+          progress.style.width = "0%";
+          button.classList.remove("holding");
+          elapsed = 0;
+          onConfirm();
+        }
+      }, stepMs);
+    };
+
+    const stop = () => {
+      if (t) {
+        clearInterval(t);
+        t = null;
+      }
+      progress.style.width = "0%";
+      button.classList.remove("holding");
+      elapsed = 0;
+    };
+
+    button.addEventListener("mousedown", start);
+    button.addEventListener("mouseup", stop);
+    button.addEventListener("mouseleave", stop);
+    
+    button.addEventListener("touchstart", start, { passive: false });
+    button.addEventListener("touchend", stop);
+    button.addEventListener("touchcancel", stop);
+  };
+
+  async function skipAnghamiSubscription(pay_id, triggerElement = null) {
+    try {
+      showSpinner(true);
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      const jwt = session?.access_token;
+      const res = await fetch(FN_CANCEL_ANGHAMI, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${jwt}` },
+        body: JSON.stringify({ action: "skip", pay_id })
+      });
+      const j = await res.json();
+      if (!res.ok || j.error) throw new Error(j.error || "Failed to skip subscription.");
+      
+      showMessage("Subscription skipped successfully.", "success");
+      cancelModal.style.display = "none";
+      
+      // Remove the row from the table instantly
+      if (triggerElement) {
+        triggerElement.closest("tr")?.remove();
+      } else {
+        const rowToRemove = subscriptionTable.querySelector(`[data-id="${pay_id}"]`);
+        if (rowToRemove) rowToRemove.closest("tr")?.remove();
+      }
+      
+      fetchDashboardKpis();
+    } catch (e) {
+      console.error(e);
+      showMessage(`Error: ${e.message}`, "error");
     } finally {
       showSpinner(false);
     }
@@ -1147,8 +1239,8 @@ user: ${it.user}`;
             subscriptionTable.appendChild(tr);
           });
         }
-      } else if (view === "unpaidanghami") {
-        subscriptionTableTitle.textContent = "Unpaid Anghami Renewals";
+      } else if (view === "unpaidanghami" || view === "anghami_SKIPPED") {
+        subscriptionTableTitle.textContent = view === "unpaidanghami" ? "Unpaid Anghami Renewals" : "Skipped Anghami Renewals";
         subscriptionTableHead.innerHTML = `
           <tr>
             <th>ID <button class="sort-btn" data-column="0">↕️</button></th>
@@ -1160,10 +1252,10 @@ user: ${it.user}`;
             <th>Actions</th>
           </tr>`;
         const rows = data.unpaidAnghamis || [];
-        showCountBadge(`Unpaid Ang: ${rows.length} rows`, "fa-solid fa-music");
+        showCountBadge(view === "unpaidanghami" ? `Unpaid Ang: ${rows.length} rows` : `Skipped Ang: ${rows.length} rows`, "fa-solid fa-music");
         subscriptionTable.innerHTML = "";
         if (!rows.length) {
-          subscriptionTable.innerHTML = `<tr><td colspan="7" style="text-align:center;">No unpaid Anghami renewals.</td></tr>`;
+          subscriptionTable.innerHTML = `<tr><td colspan="7" style="text-align:center;">No ${view === "unpaidanghami" ? "unpaid" : "skipped"} Anghami renewals.</td></tr>`;
         } else {
           rows.forEach(row => {
             const ts = row.timestamp ? formatCompactDate(row.timestamp) : "";
@@ -1175,10 +1267,25 @@ user: ${it.user}`;
                 <td data-label="Duration">${row.duration ?? ""}</td>
                 <td data-label="Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.accemail || ''}'); showMessage('Copied email!', 'success')">${row.accemail ?? ""}</span></td>
                 <td data-label="Paid">${row.paid ?? ""}</td>
-                <td data-label="Actions"><button class="btn-table-action btn-delete cancel-anghami-btn" data-id="${row.id}"><i class="fa-solid fa-xmark"></i> Cancel</button></td>
+                <td data-label="Actions">
+                  <div style="display:flex; gap:8px;">
+                    <button class="btn-table-action btn-delete cancel-anghami-btn" data-id="${row.id}"><i class="fa-solid fa-xmark"></i> Cancel</button>
+                    ${view === "unpaidanghami" ? `
+                    <button class="btn-table-action btn-hold-skip skip-anghami-btn" data-id="${row.id}"><i class="fa-solid fa-forward"></i> Hold to Skip</button>
+                    ` : ''}
+                  </div>
+                </td>
               </tr>
             `);
           });
+          if (view === "unpaidanghami") {
+            subscriptionTable.querySelectorAll(".skip-anghami-btn").forEach(btn => {
+              bindHoldToSkip(btn, () => {
+                const payId = Number(btn.dataset.id);
+                skipAnghamiSubscription(payId, btn);
+              });
+            });
+          }
         }
       } else if (view === "unpaidgpt") {
         subscriptionTableTitle.textContent = "Unpaid GPT Renewals";

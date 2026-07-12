@@ -852,3 +852,28 @@ tr:hover td {
     text-align: left !important;
   }
 }
+
+/* Hold to Skip Button Styles */
+.btn-hold-skip {
+  position: relative;
+  overflow: hidden;
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-color: rgba(245, 158, 11, 0.25) !important;
+  color: #fde68a !important;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-hold-skip:hover {
+  background: rgba(245, 158, 11, 0.2) !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+}
+.btn-hold-skip .hold-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: rgba(245, 158, 11, 0.35) !important;
+  pointer-events: none;
+  transition: width 0.05s linear;
+}
