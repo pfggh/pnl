@@ -7,11 +7,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
+  window.miscUnlocked = false;
+
   // Navigation elements
   const subscriptionsLink = document.getElementById("subscriptions-link");
   const accountsLink = document.getElementById("accounts-link");
   const logoutButton = document.getElementById("logout");
   const teamsLink = document.getElementById("teams-link"); // New
+  const miscLink = document.getElementById("misc-link"); // New
 
   // Helper to switch visible page
   const showPage = (pageId) => {
@@ -24,6 +27,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (pageId === "subscriptions-page") subscriptionsLink?.classList.add("active");
     if (pageId === "accounts-page") accountsLink?.classList.add("active");
     if (pageId === "teams-page") teamsLink?.classList.add("active");
+    if (pageId === "misc-page") miscLink?.classList.add("active");
 
     window.scrollTo(0, 0);
   };
@@ -56,6 +60,83 @@ document.addEventListener("DOMContentLoaded", async () => {
       showPage("teams-page");
       // Initialize/Refresh teams data when tab is clicked
       if (window.Teams) window.Teams.init();
+    });
+  }
+
+  if (miscLink) {
+    miscLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (window.miscUnlocked) {
+        showPage("misc-page");
+        // Initialize misc module when tab is clicked
+        if (window.Misc) window.Misc.init();
+      } else {
+        const pinTemplate = document.getElementById("misc-pin-modal-template");
+        if (pinTemplate && cancelModal && modalContent) {
+          modalContent.innerHTML = pinTemplate.innerHTML;
+
+          // Inject close button
+          if (!modalContent.querySelector("#modal-close-btn")) {
+            const closeBtn = document.createElement("button");
+            closeBtn.id = "modal-close-btn";
+            closeBtn.className = "modal-x-btn";
+            closeBtn.innerHTML = "&times;";
+            closeBtn.setAttribute("aria-label", "Close");
+            closeBtn.onclick = (event) => {
+              event.preventDefault();
+              cancelModal.style.display = "none";
+            };
+            modalContent.appendChild(closeBtn);
+          }
+
+          cancelModal.style.display = "flex";
+          cancelModal.onclick = (event) => {
+            if (event.target === cancelModal) cancelModal.style.display = "none";
+          };
+
+          const pinInput = modalContent.querySelector(".misc-pin-input");
+          const errorMsg = modalContent.querySelector(".pin-error-msg");
+          const cancelBtn = modalContent.querySelector(".pin-cancel-btn");
+          const submitBtn = modalContent.querySelector(".pin-submit-btn");
+
+          if (pinInput) {
+            setTimeout(() => pinInput.focus(), 50);
+          }
+
+          const verifyPin = () => {
+            if (pinInput && pinInput.value === "123") {
+              window.miscUnlocked = true;
+              cancelModal.style.display = "none";
+              showPage("misc-page");
+              if (window.Misc) window.Misc.init();
+            } else {
+              if (errorMsg) errorMsg.style.display = "block";
+              if (pinInput) {
+                pinInput.value = "";
+                pinInput.focus();
+              }
+            }
+          };
+
+          if (cancelBtn) {
+            cancelBtn.onclick = () => {
+              cancelModal.style.display = "none";
+            };
+          }
+
+          if (submitBtn) {
+            submitBtn.onclick = verifyPin;
+          }
+
+          if (pinInput) {
+            pinInput.onkeydown = (event) => {
+              if (event.key === "Enter") {
+                verifyPin();
+              }
+            };
+          }
+        }
+      }
     });
   }
 

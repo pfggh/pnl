@@ -32,6 +32,7 @@
               <span>Subscriptions</span></a></li>
           <li><a href="#" id="accounts-link"><i class="fa-regular fa-user"></i> <span>Accounts</span></a></li>
           <li><a href="#" id="teams-link"><i class="fa-solid fa-people-group"></i> <span>GPT Workspace</span></a></li>
+          <li><a href="#" id="misc-link"><i class="fa-solid fa-screwdriver-wrench"></i> <span>Misc</span></a></li>
         </ul>
       </nav>
     </aside>
@@ -95,23 +96,35 @@
           <div class="panel-container">
             <h2 class="section-title"><i class="fa-solid fa-screwdriver-wrench"></i> Management Tools</h2>
             <div class="actions-row">
-              <button id="open-reactivate-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace
-                GPT</button>
-              <button id="open-reactivate-link-modal" class="pill-btn" style="background:#10b981; border-color:#10b981; color:#fff"><i class="fa-solid fa-link"></i> Reactivate
-                Link</button>
-              <button id="open-replace-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace
-                Netflix</button>
+              <button id="open-reactivate-link-modal" class="pill-btn" style="background:#10b981; border-color:#10b981; color:#fff"><i class="fa-solid fa-link"></i> Reactivate Link</button>
               <button id="trigger-renewals-btn" class="pill-btn"><i class="fa-solid fa-plus"></i> Add NF Renew</button>
-              <button id="trigger-anghami-renewals-btn" class="pill-btn"><i class="fa-solid fa-plus"></i> Add Ang
-                Renew</button>
-              <button id="trigger-gpt-renewals-btn" class="pill-btn"><i class="fa-solid fa-plus"></i> Add GPT
-                Renew</button>
+              <button id="trigger-anghami-renewals-btn" class="pill-btn"><i class="fa-solid fa-plus"></i> Add Ang Renew</button>
+              <button id="trigger-gpt-renewals-btn" class="pill-btn"><i class="fa-solid fa-plus"></i> Add GPT Renew</button>
               <button id="trigger-msg" class="pill-btn"><i class="fa-solid fa-paper-plane"></i> Send Messages</button>
             </div>
           </div>
         </div>
 
         <!-- Hidden modal templates (Replace GPT + Replace Netflix) -->
+        <div id="misc-pin-modal-template" style="display:none">
+          <div style="padding-top: 20px; text-align: center;">
+            <h3 style="margin-bottom: 15px; color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 10px;">
+              <i class="fa-solid fa-lock" style="color: var(--primary)"></i> Staff Verification
+            </h3>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">
+              Please enter the staff PIN to access the Miscellaneous Tools.
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 15px; max-width: 280px; margin: 0 auto;">
+              <input type="password" class="misc-pin-input" placeholder="Enter PIN..." style="text-align: center; font-size: 1.2rem; letter-spacing: 0.2em; border-color: rgba(99, 102, 241, 0.4);" autofocus />
+              <div class="pin-error-msg" style="color: #ef4444; font-size: 0.85rem; display: none;">Incorrect PIN. Please try again.</div>
+              <div style="display: flex; gap: 12px; margin-top: 10px;">
+                <button class="pin-cancel-btn pill-btn" style="flex: 1; justify-content: center;">Cancel</button>
+                <button class="pin-submit-btn pill-btn" style="flex: 1; background: var(--primary); color: #fff; justify-content: center; border-color: var(--primary);">Confirm</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div id="reactivate-modal-template" style="display:none">
           <h3 id="gpt-replace-title"><i class="fa-solid fa-rotate" style="color:var(--primary)"></i> Replace GPT
             Subscription</h3>
@@ -299,6 +312,55 @@
           </div>
         </div>
       </div>
+
+      <!-- MISC PAGE -->
+      <div id="misc-page" class="page">
+        <header class="page-header">
+          <h1>Miscellaneous Tools</h1>
+        </header>
+
+        <div class="panel-container">
+          <div id="spinner-misc" class="spinner" style="display:none;"></div>
+          <div id="message-box-misc" class="message-box" style="display:none;"></div>
+
+          <div class="grid-tools" style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <!-- TOOL: Fix Anghami -->
+            <div class="tool-card"
+              style="background: rgba(255,255,255,0.02); padding: 25px; border-radius: 16px; border: 1px solid var(--border); max-width: 600px; flex: 1; min-width: 280px;">
+              <h2 style="margin-top:0; color: #10b981; display: flex; align-items: center; gap: 10px;">
+                <i class="fa-solid fa-music"></i> Fix Anghami Account
+              </h2>
+              <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">
+                Migrate active subscriptions away from a bad/dead Anghami account, delete short-term subscriptions (expiry <= 10 days), and clean up the database.
+              </p>
+              <form id="fix-anghami-form" style="margin-bottom: 15px;">
+                <div style="display: flex; gap: 12px;">
+                  <input type="email" id="fix-ang-email" placeholder="Anghami Account Email to Fix..." required style="flex:1" />
+                  <button type="submit" id="fix-ang-submit-btn" style="padding: 10px 20px; font-size: 0.9rem; background: #10b981; border-color: #10b981; color: #fff;">
+                    <i class="fa-solid fa-wrench"></i> Fix Account
+                  </button>
+                </div>
+              </form>
+              <div id="fix-ang-results" style="display:none; margin-top:20px;"></div>
+            </div>
+
+            <!-- TOOL: Replacement Tools -->
+            <div class="tool-card"
+              style="background: rgba(255,255,255,0.02); padding: 25px; border-radius: 16px; border: 1px solid var(--border); max-width: 600px; flex: 1; min-width: 280px;">
+              <h2 style="margin-top:0; color: #a855f7; display: flex; align-items: center; gap: 10px;">
+                <i class="fa-solid fa-rotate"></i> Replacement Tools
+              </h2>
+              <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">
+                Replace active subscriptions or reassign them to new credentials.
+              </p>
+              <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <button id="open-reactivate-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace GPT</button>
+                <button id="open-replace-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace Netflix</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -316,6 +378,7 @@
   <script src="js/subscriptions.js"></script>
   <script src="js/accounts.js"></script>
   <script src="js/team.js"></script>
+  <script src="js/misc.js"></script>
   <script src="js/main.js"></script>
   <script src="js/animations.js"></script>
 </body>
