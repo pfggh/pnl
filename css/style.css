@@ -877,3 +877,34 @@ tr:hover td {
   pointer-events: none;
   transition: width 0.05s linear;
 }
+
+/* Hold to Confirm Button Styles */
+.btn-hold-confirm {
+  position: relative;
+  overflow: hidden;
+  background: rgba(168, 85, 247, 0.12) !important;
+  border: 1px solid rgba(168, 85, 247, 0.25) !important;
+  color: #e9d5ff !important;
+  cursor: pointer;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  padding: 14px 18px;
+  border-radius: 14px;
+}
+.btn-hold-confirm:hover {
+  background: rgba(168, 85, 247, 0.2) !important;
+  border-color: rgba(168, 85, 247, 0.4) !important;
+}
+.btn-hold-confirm .hold-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: rgba(168, 85, 247, 0.35) !important;
+  pointer-events: none;
+  transition: width 0.05s linear;
+}

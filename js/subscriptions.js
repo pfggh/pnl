@@ -2009,6 +2009,199 @@ password: ${newPass}
       });
     }
 
+    // --- replace_gpt_teshrijxyz Modal Flow ---
+    const openGptXyzBtn = document.getElementById("open-gpt-xyz-modal");
+    const gptXyzTpl = document.getElementById("replace-gpt-teshrijxyz-modal-template");
+    let currentMatchedSecretId = null;
+
+    if (openGptXyzBtn && gptXyzTpl) {
+      openGptXyzBtn.addEventListener("click", () => {
+        // Reset state
+        const searchInput = document.getElementById("gpt-xyz-search-input");
+        if (searchInput) searchInput.value = "";
+        const resultsDiv = document.getElementById("gpt-xyz-results");
+        if (resultsDiv) {
+          resultsDiv.style.display = "none";
+          resultsDiv.innerHTML = "";
+        }
+        const confirmBtn = document.getElementById("gpt-xyz-confirm-btn");
+        if (confirmBtn) confirmBtn.style.display = "none";
+        const msgDiv = document.getElementById("gpt-xyz-msg");
+        if (msgDiv) msgDiv.innerHTML = "";
+        currentMatchedSecretId = null;
+
+        gptXyzTpl.style.display = "block";
+        openModalWith(gptXyzTpl);
+      });
+    }
+
+    const gptXyzSearchBtn = document.getElementById("gpt-xyz-search-btn");
+    const gptXyzSearchInput = document.getElementById("gpt-xyz-search-input");
+    const gptXyzResultsDiv = document.getElementById("gpt-xyz-results");
+    const gptXyzConfirmBtn = document.getElementById("gpt-xyz-confirm-btn");
+    const gptXyzMsgDiv = document.getElementById("gpt-xyz-msg");
+
+    if (gptXyzSearchBtn && gptXyzSearchInput && gptXyzResultsDiv && gptXyzConfirmBtn && gptXyzMsgDiv) {
+      gptXyzSearchBtn.onclick = async () => {
+        gptXyzResultsDiv.style.display = "none";
+        gptXyzResultsDiv.innerHTML = "";
+        gptXyzConfirmBtn.style.display = "none";
+        gptXyzMsgDiv.innerHTML = "";
+        currentMatchedSecretId = null;
+
+        const val = gptXyzSearchInput.value.trim();
+        if (!val) {
+          gptXyzMsgDiv.innerHTML = `<span style="color:#ef4444;">Please enter an email or link.</span>`;
+          return;
+        }
+
+        gptXyzSearchBtn.disabled = true;
+        const oldText = gptXyzSearchBtn.innerHTML;
+        gptXyzSearchBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i>`;
+
+        try {
+          const { data: { session } } = await window.supabaseClient.auth.getSession();
+          const token = session?.access_token;
+          if (!token) throw new Error("Not authenticated.");
+
+          const res = await fetch(`${window.SUPABASE_URL}/functions/v1/replace_gpt_teshrijxyz`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ query: val, action: "search" })
+          });
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `HTTP Error ${res.status}`);
+          }
+
+          const data = await res.json();
+          const matches = data.matches || [];
+
+          if (matches.length === 0) {
+            gptXyzMsgDiv.innerHTML = `<span style="color:#f59e0b;">No matching accounts found.</span>`;
+            return;
+          }
+
+          const match = matches[0];
+          currentMatchedSecretId = match.secret_id;
+
+          let twoFaHtml = "";
+          if (match.two_factor_key) {
+            twoFaHtml = `
+              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <span style="color:var(--text-muted); font-size:0.8rem;">Current 2FA Code:</span>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <strong style="color:#a855f7; font-size:1.1rem; font-family:monospace; letter-spacing:1px;">${match.current_code}</strong>
+                    <button class="copy-btn" data-value="${match.current_code}" style="padding:2px 6px; font-size:0.7rem;"><i class="fa-regular fa-copy"></i></button>
+                  </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span style="color:var(--text-muted); font-size:0.8rem;">Next 2FA Code:</span>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <strong style="color:var(--text-muted); font-size:1rem; font-family:monospace; letter-spacing:1px;">${match.next_code}</strong>
+                    <button class="copy-btn" data-value="${match.next_code}" style="padding:2px 6px; font-size:0.7rem;"><i class="fa-regular fa-copy"></i></button>
+                  </div>
+                </div>
+              </div>
+            `;
+          } else {
+            twoFaHtml = `<div style="margin-top: 10px; color:var(--text-muted); font-size:0.8rem; text-align:center;">No 2FA Key configured.</div>`;
+          }
+
+          gptXyzResultsDiv.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:var(--text-muted); font-size:0.8rem;">Email:</span>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <span style="font-weight:600; color:#fff; word-break:break-all;">${match.email}</span>
+                  <button class="copy-btn" data-value="${match.email}" style="padding:2px 6px; font-size:0.7rem;"><i class="fa-regular fa-copy"></i></button>
+                </div>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:var(--text-muted); font-size:0.8rem;">Password:</span>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <span style="font-weight:600; color:#fff;">${match.password || ""}</span>
+                  <button class="copy-btn" data-value="${match.password || ""}" style="padding:2px 6px; font-size:0.7rem;"><i class="fa-regular fa-copy"></i></button>
+                </div>
+              </div>
+              ${twoFaHtml}
+            </div>
+          `;
+
+          gptXyzResultsDiv.style.display = "block";
+          gptXyzConfirmBtn.style.display = "flex";
+        } catch (err) {
+          console.error(err);
+          gptXyzMsgDiv.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}</span>`;
+        } finally {
+          gptXyzSearchBtn.disabled = false;
+          gptXyzSearchBtn.innerHTML = oldText;
+        }
+      };
+
+      bindHoldToSkip(gptXyzConfirmBtn, async () => {
+        if (!currentMatchedSecretId) return;
+
+        gptXyzConfirmBtn.disabled = true;
+        const oldBtnText = gptXyzConfirmBtn.innerHTML;
+        gptXyzConfirmBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i> Replacing...`;
+        gptXyzMsgDiv.innerHTML = "";
+
+        try {
+          const { data: { session } } = await window.supabaseClient.auth.getSession();
+          const token = session?.access_token;
+          if (!token) throw new Error("Not authenticated.");
+
+          const res = await fetch(`${window.SUPABASE_URL}/functions/v1/replace_gpt_teshrijxyz`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ secret_id: currentMatchedSecretId, action: "confirm" })
+          });
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `HTTP Error ${res.status}`);
+          }
+
+          const result = await res.json();
+          if (result.error) throw new Error(result.error);
+
+          gptXyzConfirmBtn.style.display = "none";
+          gptXyzResultsDiv.style.display = "none";
+          gptXyzMsgDiv.innerHTML = `
+            <div style="margin-top: 10px; background: rgba(168, 85, 247, 0.1); padding: 15px; border-radius: 12px; border: 1px solid #a855f7; text-align: left; font-size: 0.95rem; color: #d8b4fe; margin-bottom: 15px; white-space: pre-line;">
+              <i class="fa-solid fa-circle-check"></i> ${result.message || "Successfully replaced!"}
+            </div>
+            <div style="display:flex;justify-content:center;margin-top:16px">
+              <button id="close-gpt-xyz-success-btn" class="pill-btn" style="background:#a855f7; border-color:#a855f7; color:#fff; justify-content:center; width:100%;">Close</button>
+            </div>
+          `;
+
+          const closeBtn = document.getElementById("close-gpt-xyz-success-btn");
+          if (closeBtn) {
+            closeBtn.onclick = () => {
+              cancelModal.style.display = "none";
+            };
+          }
+          fetchDashboardKpis();
+        } catch (err) {
+          console.error(err);
+          gptXyzMsgDiv.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}</span>`;
+        } finally {
+          gptXyzConfirmBtn.disabled = false;
+          gptXyzConfirmBtn.innerHTML = oldBtnText;
+        }
+      });
+    }
+
     // --- Trigger functions with robust handling ---
     async function doGenericTrigger(btnId, limitId, endpoint, title, successPrefix) {
       const btn = document.getElementById(btnId);

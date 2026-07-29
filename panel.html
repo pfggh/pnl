@@ -168,6 +168,22 @@
           <div id="reactivate-link-msg" style="margin-top:15px; text-align:center;"></div>
         </div>
 
+        <div id="replace-gpt-teshrijxyz-modal-template" style="display:none">
+          <h3><i class="fa-solid fa-rotate" style="color:#a855f7"></i> Replace GPT (TeshrijXYZ)</h3>
+          <p id="gpt-xyz-sub-title" style="color:var(--text-muted); font-size:0.85rem; margin-bottom:15px;">Search by account email or link to see details & 2FA codes, then hold confirm to replace.</p>
+          <div id="gpt-xyz-search-container" style="display:flex; gap:10px; margin-bottom:15px;">
+            <input type="text" id="gpt-xyz-search-input" placeholder="Enter email or link..." style="flex:1" />
+            <button id="gpt-xyz-search-btn" class="pill-btn" style="background:#a855f7; padding:10px 20px;"><i class="fa-solid fa-magnifying-glass" style="color:#fff"></i> Search</button>
+          </div>
+          <div id="gpt-xyz-results" style="display:none; margin-bottom:15px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 12px; padding: 15px;">
+            <!-- details will go here -->
+          </div>
+          <button id="gpt-xyz-confirm-btn" class="pill-btn btn-hold-confirm" style="display:none; width:100%; background:#a855f7; justify-content:center;">
+            <i class="fa-solid fa-check" style="color:#fff"></i> Hold to Confirm
+          </button>
+          <div id="gpt-xyz-msg" style="margin-top:15px; text-align:center;"></div>
+        </div>
+
         <!-- Subscriptions Table and Filter -->
         <h2 class="section-title">View:</h2>
         <div class="select-container"
@@ -356,6 +372,7 @@
               <div style="display: flex; gap: 12px; flex-wrap: wrap;">
                 <button id="open-reactivate-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace GPT</button>
                 <button id="open-replace-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace Netflix</button>
+                <button id="open-gpt-xyz-modal" class="pill-btn" style="background:#a855f7; border-color:#a855f7; color:#fff"><i class="fa-solid fa-rotate"></i> Replace GPT TeshrijXYZ</button>
               </div>
             </div>
           </div>
