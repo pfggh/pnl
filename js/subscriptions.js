@@ -175,11 +175,79 @@ window.Subscriptions = (() => {
 
   // GPT cancel modal state
   let currentGptPayId = null;
+  let gpt2faInterval = null;
+
+  function base32ToBytes(base32) {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    let bits = 0;
+    let value = 0;
+    const bytes = [];
+    for (let i = 0; i < base32.length; i++) {
+      const idx = alphabet.indexOf(base32[i].toUpperCase());
+      if (idx === -1) continue;
+      value = (value << 5) | idx;
+      bits += 5;
+      if (bits >= 8) {
+        bytes.push((value >>> (bits - 8)) & 255);
+        bits -= 8;
+      }
+    }
+    return new Uint8Array(bytes);
+  }
+
+  async function generateTOTP(secret, offsetSeconds = 0) {
+    try {
+      const base32 = secret.replace(/\s/g, "");
+      const keyBytes = base32ToBytes(base32);
+      if (keyBytes.length === 0) return "";
+      
+      const epoch = Math.floor(Date.now() / 1000) + offsetSeconds;
+      const time = Math.floor(epoch / 30);
+      
+      const timeBuffer = new ArrayBuffer(8);
+      const view = new DataView(timeBuffer);
+      view.setUint32(4, time);
+
+      const cryptoKey = await window.crypto.subtle.importKey(
+        "raw",
+        keyBytes,
+        { name: "HMAC", hash: { name: "SHA-1" } },
+        false,
+        ["sign"]
+      );
+
+      const signature = await window.crypto.subtle.sign("HMAC", cryptoKey, timeBuffer);
+      const hmac = new Uint8Array(signature);
+      const offset = hmac[hmac.length - 1] & 0xf;
+      const binary =
+        ((hmac[offset] & 0x7f) << 24) |
+        ((hmac[offset + 1] & 0xff) << 16) |
+        ((hmac[offset + 2] & 0xff) << 8) |
+        (hmac[offset + 3] & 0xff);
+
+      return (binary % 1000000).toString().padStart(6, "0");
+    } catch (err) {
+      console.error("Error generating TOTP:", err);
+      return "Error";
+    }
+  }
+
+  function closeModal() {
+    if (gpt2faInterval) {
+      clearInterval(gpt2faInterval);
+      gpt2faInterval = null;
+    }
+    cancelModal.style.display = "none";
+  }
 
   // --- End modal helpers ---
 
   // ——— GPT Cancel Modal Helpers ———
   function openGptCancelModal(payId) {
+    if (gpt2faInterval) {
+      clearInterval(gpt2faInterval);
+      gpt2faInterval = null;
+    }
     currentGptPayId = payId;
     modalContent.innerHTML = "";
     loadGptCancelDetails();
@@ -202,6 +270,17 @@ window.Subscriptions = (() => {
       const detail = await res.json();
       if (!res.ok || detail.error) throw new Error(detail.error || "Failed to load details.");
 
+      const has2fa = !!detail.two_factor_key;
+      let twofaHtml = "";
+      if (has2fa) {
+        twofaHtml = `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;">
+            <span style="font-size:0.9rem"><strong>2FA Code:</strong> <span id="gpt-2fa-code" style="font-weight:bold;color:var(--primary);font-size:1.1rem">Generating...</span> <span id="gpt-2fa-timer" style="font-size:0.8rem;color:#666"></span></span>
+            <button id="copy-2fa-code-btn" class="copy-btn" data-value=""><i class="fa-regular fa-copy"></i> Copy Code</button>
+          </div>
+        `;
+      }
+
       // Build modal UI
       modalContent.innerHTML = `
         <div style="padding-top:40px;">
@@ -213,6 +292,7 @@ window.Subscriptions = (() => {
             <span style="font-size:0.9rem"><strong>Password:</strong> ${detail.password}</span>
             <button class="copy-btn" data-value="${detail.password}"><i class="fa-regular fa-copy"></i> Copy</button>
           </div>
+          ${twofaHtml}
 
           <div style="display:flex;gap:12px;justify-content:center;margin-top:24px">
             <button id="gpt-cancel-confirm" class="pill-btn" style="background:var(--primary)"><i class="fa-solid fa-trash-can" style="color:#fff"></i> Cancel Subscription</button>
@@ -222,12 +302,30 @@ window.Subscriptions = (() => {
       `;
       injectCloseButton();
 
+      if (has2fa) {
+        const codeSpan = document.getElementById("gpt-2fa-code");
+        const timerSpan = document.getElementById("gpt-2fa-timer");
+        const copyCodeBtn = document.getElementById("copy-2fa-code-btn");
+
+        const update2FA = async () => {
+          const code = await generateTOTP(detail.two_factor_key);
+          const epoch = Math.floor(Date.now() / 1000);
+          const secsLeft = 30 - (epoch % 30);
+          if (codeSpan) codeSpan.textContent = code;
+          if (timerSpan) timerSpan.textContent = `(${secsLeft}s left)`;
+          if (copyCodeBtn) copyCodeBtn.dataset.value = code;
+        };
+
+        await update2FA();
+        gpt2faInterval = setInterval(update2FA, 1000);
+      }
+
       // Bind modal actions with a single handler (avoid multiplying listeners)
       modalContent.onclick = async (e) => {
         const t = e.target;
         const btn = t.classList.contains("copy-btn") ? t : t.closest(".copy-btn");
         if (t.id === "close-modal-btn") {
-          cancelModal.style.display = "none";
+          closeModal();
         } else if (btn) {
           const v = btn.dataset.value;
           if (v !== undefined && v !== null) {
@@ -250,7 +348,7 @@ window.Subscriptions = (() => {
           <button id="close-modal-btn" class="btn-primary">Close</button>
         </div>
       `;
-      modalContent.onclick = (e) => e.target.id === "close-modal-btn" && (cancelModal.style.display = "none");
+      modalContent.onclick = (e) => e.target.id === "close-modal-btn" && closeModal();
     } finally {
       showSpinner(false);
     }
@@ -288,7 +386,7 @@ window.Subscriptions = (() => {
       fetchDashboardKpis();
 
       // Allow closing
-      modalContent.onclick = (e) => e.target.id === "close-modal-btn" && (cancelModal.style.display = "none");
+      modalContent.onclick = (e) => e.target.id === "close-modal-btn" && closeModal();
     } catch (err) {
       console.error(err);
       showMessage(`Error: ${err.message}`, "error");
