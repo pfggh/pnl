@@ -1394,6 +1394,7 @@ user: ${it.user}`;
             <th>Phone <button class="sort-btn" data-column="2">↕️</button></th>
             <th>Duration <button class="sort-btn" data-column="3">↕️</button></th>
             <th>Email <button class="sort-btn" data-column="4">↕️</button></th>
+            <th>Expireds <button class="sort-btn" data-column="5">↕️</button></th>
             <th>Paid</th>
             <th>Actions</th>
           </tr>`;
@@ -1401,7 +1402,7 @@ user: ${it.user}`;
         showCountBadge(`Unpaid GPT: ${rows.length} rows`, "fa-solid fa-robot");
         subscriptionTable.innerHTML = "";
         if (!rows.length) {
-          subscriptionTable.innerHTML = `<tr><td colspan="7" style="text-align:center;">No unpaid GPT renewals.</td></tr>`;
+          subscriptionTable.innerHTML = `<tr><td colspan="8" style="text-align:center;">No unpaid GPT renewals.</td></tr>`;
         } else {
           rows.forEach(row => {
             const ts = row.timestamp ? formatCompactDate(row.timestamp) : "";
@@ -1412,6 +1413,7 @@ user: ${it.user}`;
                 <td data-label="Phone"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.phone || ''}'); showMessage('Copied phone number!', 'success')">${row.phone ?? ""}</span></td>
                 <td data-label="Duration">${row.duration ?? ""}</td>
                 <td data-label="Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.accemail || ''}'); showMessage('Copied email!', 'success')">${row.accemail ?? ""}</span></td>
+                <td data-label="Expireds">${row.expireds ?? 0}</td>
                 <td data-label="Paid">${row.paid ?? ""}</td>
                 <td data-label="Actions"><button class="btn-table-action btn-delete gpt-cancel-btn" data-id="${row.id}"><i class="fa-solid fa-xmark"></i> Cancel</button></td>
               </tr>
