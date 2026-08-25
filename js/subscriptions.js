@@ -281,6 +281,20 @@ window.Subscriptions = (() => {
         `;
       }
 
+      const hasLink = !!detail.link;
+      let linkHtml = "";
+      if (hasLink) {
+        linkHtml = `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+            <span style="font-size:0.9rem;word-break:break-all;"><strong>Link:</strong> ${detail.link}</span>
+            <div style="display:flex;gap:6px;">
+              <button class="copy-btn" data-value="${detail.link}"><i class="fa-regular fa-copy"></i> Copy Link</button>
+              <a href="${detail.link}" target="_blank" rel="noopener noreferrer" class="copy-btn open-link-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Link</a>
+            </div>
+          </div>
+        `;
+      }
+
       // Build modal UI
       modalContent.innerHTML = `
         <div style="padding-top:40px;">
@@ -292,6 +306,7 @@ window.Subscriptions = (() => {
             <span style="font-size:0.9rem"><strong>Password:</strong> ${detail.password}</span>
             <button class="copy-btn" data-value="${detail.password}"><i class="fa-regular fa-copy"></i> Copy</button>
           </div>
+          ${linkHtml}
           ${twofaHtml}
 
           <div style="display:flex;gap:12px;justify-content:center;margin-top:24px">
@@ -323,10 +338,26 @@ window.Subscriptions = (() => {
       // Bind modal actions with a single handler (avoid multiplying listeners)
       modalContent.onclick = async (e) => {
         const t = e.target;
+        const openLinkAnchor = t.classList.contains("open-link-btn") ? t : t.closest(".open-link-btn");
+        if (openLinkAnchor) {
+          try {
+            const { data: { session } } = await window.supabaseClient.auth.getSession();
+            const jwt = session?.access_token;
+            await fetch(FN_CANCEL_GPT, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": `Bearer ${jwt}` },
+              body: JSON.stringify({ action: "reactivate_link", pay_id: currentGptPayId })
+            });
+            showMessage("Account last_link timestamp updated to now.", "success");
+          } catch (err) {
+            console.error("Failed to update last_link on click:", err);
+          }
+        }
+
         const btn = t.classList.contains("copy-btn") ? t : t.closest(".copy-btn");
         if (t.id === "close-modal-btn") {
           closeModal();
-        } else if (btn) {
+        } else if (btn && !btn.classList.contains("open-link-btn")) {
           const v = btn.dataset.value;
           if (v !== undefined && v !== null) {
             try {
@@ -1384,6 +1415,78 @@ user: ${it.user}`;
               });
             });
           }
+        }
+      } else if (view === "anghami_filtered") {
+        subscriptionTableTitle.textContent = "Anghami Filtered (Username & Link Email)";
+        subscriptionTableHead.innerHTML = `
+          <tr>
+            <th>Sub ID <button class="sort-btn" data-column="0">↕️</button></th>
+            <th>Phone <button class="sort-btn" data-column="1">↕️</button></th>
+            <th>Username <button class="sort-btn" data-column="2">↕️</button></th>
+            <th>Link Email <button class="sort-btn" data-column="3">↕️</button></th>
+            <th>Duration <button class="sort-btn" data-column="4">↕️</button></th>
+            <th>Expiry <button class="sort-btn" data-column="5">↕️</button></th>
+            <th>Actions</th>
+          </tr>`;
+        const rows = data.filteredAnghami || [];
+        showCountBadge(`Filtered Anghami: ${rows.length} rows`, "fa-solid fa-music");
+        subscriptionTable.innerHTML = "";
+        if (!rows.length) {
+          subscriptionTable.innerHTML = `<tr><td colspan="7" style="text-align:center;">No matching Anghami subscriptions found.</td></tr>`;
+        } else {
+          rows.forEach(row => {
+            const exp = row.expiry ? formatCompactDate(row.expiry) : "";
+            subscriptionTable.insertAdjacentHTML("beforeend", `
+              <tr>
+                <td data-label="Sub ID">${row.sub_id ?? ""}</td>
+                <td data-label="Phone"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.phone || ''}'); showMessage('Copied phone number!', 'success')">${row.phone ?? ""}</span></td>
+                <td data-label="Username"><span id="username-val-${row.sub_id}">${row.username ?? ""}</span></td>
+                <td data-label="Link Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.accemail || ''}'); showMessage('Copied email!', 'success')">${row.accemail ?? ""}</span></td>
+                <td data-label="Duration">${row.duration ?? ""}</td>
+                <td data-label="Expiry">${exp}</td>
+                <td data-label="Actions">
+                  <button class="btn-table-action btn-update update-anghami-username-btn" data-sub-id="${row.sub_id}" data-username="${row.username ?? ""}"><i class="fa-solid fa-pen-to-square"></i> Update Username</button>
+                </td>
+              </tr>
+            `);
+          });
+
+          subscriptionTable.querySelectorAll(".update-anghami-username-btn").forEach(btn => {
+            btn.addEventListener("click", async () => {
+              const subId = btn.dataset.subId;
+              const currentUsername = btn.dataset.username;
+              const newUsername = prompt("Enter new username for subscription ID " + subId + ":", currentUsername);
+              if (newUsername === null) return;
+              const trimmed = newUsername.trim();
+              if (!trimmed) {
+                showMessage("Username cannot be empty", "error");
+                return;
+              }
+              showSpinner(true);
+              try {
+                const res = await fetch(`${window.SUPABASE_URL}/functions/v1/update_anghami_username`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${window.authToken}`,
+                  },
+                  body: JSON.stringify({ sub_id: Number(subId), username: trimmed }),
+                });
+                const resData = await res.json();
+                if (!res.ok || resData.error) {
+                  throw new Error(resData.error || "Failed to update username");
+                }
+                showMessage("Username updated successfully!", "success");
+                btn.dataset.username = trimmed;
+                const span = document.getElementById(`username-val-${subId}`);
+                if (span) span.textContent = trimmed;
+              } catch (err) {
+                showMessage(err.message || "Failed to update username", "error");
+              } finally {
+                showSpinner(false);
+              }
+            });
+          });
         }
       } else if (view === "unpaidgpt") {
         subscriptionTableTitle.textContent = "Unpaid GPT Renewals";
