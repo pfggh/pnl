@@ -1980,6 +1980,8 @@ password: ${newPass}
       } else if (svc === "canva") {
         endpoint = "/functions/v1/addcanva";
         body.sub_email = subEmail; // required for Canva
+      } else if (svc === "spotify") {
+        endpoint = "/functions/v1/addspotify";
       } else if (svc === "gpt private") {
         endpoint = "/functions/v1/addprivate";
         body.email = subEmail;
