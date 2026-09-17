@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const logoutButton = document.getElementById("logout");
   const teamsLink = document.getElementById("teams-link"); // New
   const miscLink = document.getElementById("misc-link"); // New
+  const messagingStatsLink = document.getElementById("messaging-stats-link");
 
   // Helper to switch visible page
   const showPage = (pageId) => {
@@ -27,6 +28,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (pageId === "subscriptions-page") subscriptionsLink?.classList.add("active");
     if (pageId === "accounts-page") accountsLink?.classList.add("active");
     if (pageId === "teams-page") teamsLink?.classList.add("active");
+    if (pageId === "messaging-stats-page") messagingStatsLink?.classList.add("active");
     if (pageId === "misc-page") miscLink?.classList.add("active");
 
     window.scrollTo(0, 0);
@@ -60,6 +62,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       showPage("teams-page");
       // Initialize/Refresh teams data when tab is clicked
       if (window.Teams) window.Teams.init();
+    });
+  }
+
+  if (messagingStatsLink) {
+    messagingStatsLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      showPage("messaging-stats-page");
+      if (window.MessagingStats) window.MessagingStats.init();
     });
   }
 

@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -32,6 +33,7 @@
               <span>Subscriptions</span></a></li>
           <li><a href="#" id="accounts-link"><i class="fa-regular fa-user"></i> <span>Accounts</span></a></li>
           <li><a href="#" id="teams-link"><i class="fa-solid fa-people-group"></i> <span>GPT Workspace</span></a></li>
+          <li><a href="#" id="messaging-stats-link"><i class="fa-solid fa-chart-line"></i> <span>Messaging Stats</span></a></li>
           <li><a href="#" id="misc-link"><i class="fa-solid fa-screwdriver-wrench"></i> <span>Misc</span></a></li>
         </ul>
       </nav>
@@ -69,6 +71,7 @@
               <input type="text" id="phone" placeholder="Phone Number" required />
               <input type="text" id="username" placeholder="Username (Anghami only)" />
               <input type="email" id="sub-email" placeholder="Customer Email (Canva/Private)" />
+              <input type="text" id="clickid" placeholder="Tracking / Click ID (WhatsApp CTWA)" />
               <select id="service">
                 <option value="Netflix" selected>Netflix Account</option>
                 <option value="Anghami">Anghami Plus</option>
@@ -354,12 +357,46 @@
               </p>
               <form id="fix-anghami-form" style="margin-bottom: 15px;">
                 <div style="display: flex; gap: 12px;">
-                  <input type="email" id="fix-ang-email" placeholder="Anghami Account Email to Fix..." required style="flex:1" />
+                  <input type="text" id="fix-ang-email" placeholder="Anghami Account Email to Fix..." required style="flex:1" />
                   <button type="submit" id="fix-ang-submit-btn" style="padding: 10px 20px; font-size: 0.9rem; background: #10b981; border-color: #10b981; color: #fff;">
                     <i class="fa-solid fa-wrench"></i> Fix Account
                   </button>
                 </div>
               </form>
+
+              <!-- Batch Auto-Fix (> 1 Year Old) -->
+              <div style="margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                  <h3 style="margin: 0; font-size: 0.95rem; color: #10b981; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Batch Fix Old Accounts (&gt; 1 Year)
+                  </h3>
+                  <span id="fix-ang-old-count-badge" style="display:none; font-size:0.75rem; background:rgba(16, 185, 129, 0.15); color:#10b981; padding:2px 8px; border-radius:10px; font-weight:600;"></span>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 14px; line-height: 1.4;">
+                  Automatically run Fix Anghami for every single email in <code>anghami_accs</code> where <code>datetime_added &lt; NOW() - INTERVAL '1 year'</code>.
+                </p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                  <button type="button" id="fix-ang-auto-btn" class="pill-btn" style="background: #10b981; border-color: #10b981; color: #fff; font-size: 0.9rem; padding: 10px 18px; font-weight: 600;">
+                    <i class="fa-solid fa-bolt"></i> Auto-Run Fix Anghami (&gt; 1 Year)
+                  </button>
+                  <button type="button" id="fix-ang-check-btn" class="pill-btn" style="background: rgba(255, 255, 255, 0.05); color: var(--text); font-size: 0.85rem; padding: 10px 14px;">
+                    <i class="fa-solid fa-magnifying-glass"></i> Check Expired Accounts
+                  </button>
+                </div>
+
+                <!-- Progress and Live Log Container -->
+                <div id="fix-ang-batch-container" style="display: none; margin-top: 16px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border); border-radius: 12px; padding: 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span id="fix-ang-batch-status" style="font-size: 0.85rem; font-weight: 600; color: var(--text);">Processing...</span>
+                    <span id="fix-ang-batch-percent" style="font-size: 0.85rem; color: #10b981; font-weight: bold;">0%</span>
+                  </div>
+                  <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden; margin-bottom: 10px;">
+                    <div id="fix-ang-batch-bar" style="width: 0%; height: 100%; background: #10b981; transition: width 0.3s ease;"></div>
+                  </div>
+                  <div id="fix-ang-batch-log" style="max-height: 180px; overflow-y: auto; font-family: monospace; font-size: 0.78rem; line-height: 1.6; color: var(--text-muted); padding-right: 5px;"></div>
+                </div>
+              </div>
+
               <div id="fix-ang-results" style="display:none; margin-top:20px;"></div>
             </div>
 
@@ -376,6 +413,149 @@
                 <button id="open-replace-modal" class="pill-btn"><i class="fa-solid fa-rotate"></i> Replace Netflix</button>
                 <button id="open-gpt-xyz-modal" class="pill-btn" style="background:#a855f7; border-color:#a855f7; color:#fff"><i class="fa-solid fa-rotate"></i> Replace GPT TeshrijXYZ</button>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MESSAGING STATS PAGE -->
+      <div id="messaging-stats-page" class="page">
+        <header class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+          <div>
+            <h1>Messaging & Employee Stats</h1>
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-top: 4px;">
+              Live WhatsApp metrics, customer response times, and minute-by-minute employee productivity.
+            </p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <input type="date" id="msg-date-picker" style="padding: 9px 14px; border-radius: 12px; background: rgba(30, 41, 59, 0.6); border: 1px solid var(--border); color: #fff; font-size: 0.85rem; outline: none;">
+            <button id="msg-quick-today" class="pill-btn" style="padding: 9px 15px; font-size: 0.85rem; font-weight: 600;">Today</button>
+            <button id="msg-quick-yesterday" class="pill-btn" style="padding: 9px 15px; font-size: 0.85rem; font-weight: 600;">Yesterday</button>
+            <button id="msg-refresh-btn" class="pill-btn" title="Refresh Statistics" style="padding: 9px 14px;"><i class="fa-solid fa-arrows-rotate"></i></button>
+            <button id="msg-sync-now-btn" class="pill-btn" style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 9px 18px; font-weight: 600; font-size: 0.85rem; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);">
+              <i class="fa-solid fa-cloud-arrow-down"></i> Sync BSB Now
+            </button>
+          </div>
+        </header>
+
+        <!-- Loading Indicator -->
+        <div id="msg-stats-loading" style="display: none; align-items: center; justify-content: center; gap: 12px; padding: 14px; margin-bottom: 25px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 14px; color: #a5b4fc; font-weight: 500;">
+          <i class="fa-solid fa-spinner fa-spin"></i> Loading messaging analytics...
+        </div>
+
+        <!-- KPI Grid -->
+        <div class="grid-kpi" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+          <div class="kpi-card">
+            <span class="kpi-label"><i class="fa-solid fa-comments" style="color: #6366f1;"></i> Messages Today</span>
+            <span class="kpi-value" id="msg-kpi-total">—</span>
+            <div id="msg-kpi-incoming-sub" style="font-size: 0.82rem; margin-top: 10px; color: var(--text-muted);">—</div>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label"><i class="fa-solid fa-bullhorn" style="color: #ec4899;"></i> Messages From Ads</span>
+            <span class="kpi-value" id="msg-kpi-ads">—</span>
+            <div id="msg-kpi-ads-sub" style="font-size: 0.82rem; margin-top: 10px; color: var(--text-muted);">—</div>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label"><i class="fa-solid fa-stopwatch" style="color: #f59e0b;"></i> Average Wait</span>
+            <span class="kpi-value" id="msg-kpi-wait" style="font-size: 2.1rem;">—</span>
+            <div id="msg-kpi-wait-sub" style="font-size: 0.82rem; margin-top: 10px; color: var(--text-muted);">—</div>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label"><i class="fa-solid fa-users" style="color: #10b981;"></i> Active Agents</span>
+            <span class="kpi-value" id="msg-kpi-agents">—</span>
+            <div id="msg-kpi-agents-sub" style="font-size: 0.82rem; margin-top: 10px; color: var(--text-muted);">—</div>
+          </div>
+
+          <div class="kpi-card">
+            <span class="kpi-label"><i class="fa-solid fa-clock-rotate-left" style="color: #a855f7;"></i> Last Sync</span>
+            <span class="kpi-value" id="msg-kpi-sync-time" style="font-size: 1.8rem;">—</span>
+            <div style="font-size: 0.82rem; margin-top: 10px; color: #10b981;">Auto-synced via BSB</div>
+          </div>
+        </div>
+
+        <!-- MAIN GRAPH: Employee Activity Minute-by-Minute -->
+        <div class="panel-container" style="padding: 28px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <h2 class="section-title" style="margin-bottom: 4px;">
+                <i class="fa-solid fa-chart-line"></i> Messages by Employee (Minute-by-Minute)
+              </h2>
+              <p style="color: var(--text-muted); font-size: 0.88rem;">
+                Real-time minute-by-minute messages sent per agent. Pinpoints bursts, speed, and output throughout the day.
+              </p>
+            </div>
+          </div>
+          <div style="position: relative; height: 380px; width: 100%;">
+            <canvas id="employee-minute-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- SECONDARY CHARTS GRID -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 25px; margin-bottom: 45px;">
+          <!-- Hourly Inbound vs Outbound -->
+          <div class="panel-container" style="padding: 28px; margin-bottom: 0;">
+            <h2 class="section-title" style="margin-bottom: 6px;">
+              <i class="fa-solid fa-clock"></i> Hourly Traffic (Inbound vs Outbound)
+            </h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 18px;">
+              24-hour distribution of customer incoming chats vs team replies.
+            </p>
+            <div style="position: relative; height: 280px; width: 100%;">
+              <canvas id="hourly-traffic-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Employee Output Share Doughnut -->
+          <div class="panel-container" style="padding: 28px; margin-bottom: 0;">
+            <h2 class="section-title" style="margin-bottom: 6px;">
+              <i class="fa-solid fa-chart-pie"></i> Agent Share of Outgoing Messages
+            </h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 18px;">
+              Proportion of messages sent by each team member today.
+            </p>
+            <div style="position: relative; height: 280px; width: 100%;">
+              <canvas id="employee-donut-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- BOTTOM GRID: Top Meta Ads & Employee Breakdown Table -->
+        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 25px; margin-bottom: 45px;">
+          <!-- Employee Activity Table -->
+          <div class="panel-container" style="padding: 28px; margin-bottom: 0;">
+            <h2 class="section-title" style="margin-bottom: 16px;">
+              <i class="fa-solid fa-user-check"></i> Agent Performance Breakdown
+            </h2>
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                <thead>
+                  <tr style="border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em;">
+                    <th style="padding: 10px 14px;">Employee</th>
+                    <th style="padding: 10px 14px;">Sent Msgs</th>
+                    <th style="padding: 10px 14px;">Share</th>
+                    <th style="padding: 10px 14px;">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="employee-breakdown-tbody">
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Top Meta Ads List -->
+          <div class="panel-container" style="padding: 28px; margin-bottom: 0;">
+            <h2 class="section-title" style="margin-bottom: 6px;">
+              <i class="fa-brands fa-meta" style="color: #3b82f6;"></i> Top Meta Ads (CTWA)
+            </h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 18px;">
+              Click-to-WhatsApp ad campaigns driving the most inbound conversations.
+            </p>
+            <div id="top-ads-list">
+              <!-- Filled dynamically -->
             </div>
           </div>
         </div>
@@ -398,6 +578,7 @@
   <script src="js/accounts.js"></script>
   <script src="js/team.js"></script>
   <script src="js/misc.js"></script>
+  <script src="js/messaging_stats.js"></script>
   <script src="js/main.js"></script>
   <script src="js/animations.js"></script>
 </body>
