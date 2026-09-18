@@ -1963,7 +1963,6 @@ password: ${newPass}
         return;
       }
       const subEmail = sanitizeInput(document.getElementById("sub-email")?.value || "");
-      const clickid = sanitizeInput(document.getElementById("clickid")?.value || "");
       // Canva OR GPT Private: require customer email
       if ((svc === "canva" || svc === "gpt private") && !subEmail) {
         showMessage("Customer email is required.", "error");
@@ -1976,7 +1975,6 @@ password: ${newPass}
       if (svc === "anghami") {
         endpoint = "/functions/v1/addanghami";
         body.username = usernameInput.value.trim();
-        if (clickid) body.clickid = clickid;
       } else if (svc === "chatgpt") {
         endpoint = "/functions/v1/addgpt";
       } else if (svc === "canva") {
