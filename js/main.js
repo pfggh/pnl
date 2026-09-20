@@ -31,6 +31,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (pageId === "messaging-stats-page") messagingStatsLink?.classList.add("active");
     if (pageId === "misc-page") miscLink?.classList.add("active");
 
+    if (pageId !== "messaging-stats-page" && window.MessagingStats?.stopLivePolling) {
+      window.MessagingStats.stopLivePolling();
+    } else if (pageId === "messaging-stats-page" && window.MessagingStats?.startLivePolling) {
+      window.MessagingStats.startLivePolling();
+    }
+
     window.scrollTo(0, 0);
   };
 

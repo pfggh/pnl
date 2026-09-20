@@ -82,10 +82,31 @@ window.Subscriptions = (() => {
       if (svc !== "canva") subEmailInput.placeholder = "email(canva)"; // Reset placeholder when hidden/not used
       subEmailInput.value = "";
     }
+
+    const formAnghamiStock = document.getElementById("form-anghami-stock");
+    if (formAnghamiStock) {
+      if (svc === "anghami") {
+        formAnghamiStock.style.display = "block";
+      } else {
+        formAnghamiStock.style.display = "none";
+      }
+    }
   }
 
-  // run once on page load (to hide unless already Canva)
+  // run once on page load (to hide unless already Canva/Anghami)
   toggleSubEmailVisibility();
+
+  // Handle clicking on form Anghami stock chips to quickly set duration
+  document.querySelectorAll(".form-stock-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const months = btn.getAttribute("data-months");
+      const durationInput = document.getElementById("duration");
+      if (durationInput && months) {
+        durationInput.value = months;
+        durationInput.focus();
+      }
+    });
+  });
 
   // run every time the service dropdown changes
   serviceSelector.addEventListener("change", toggleSubEmailVisibility);
@@ -834,6 +855,14 @@ window.Subscriptions = (() => {
     anghami: document.getElementById("kpi-anghami"),
     chatgpt: document.getElementById("kpi-chatgpt"),
     orders: document.getElementById("kpi-orders"),
+    anghamiStock1m: document.getElementById("anghami-stock-1m"),
+    anghamiStock3m: document.getElementById("anghami-stock-3m"),
+    anghamiStock6m: document.getElementById("anghami-stock-6m"),
+    anghamiStock1y: document.getElementById("anghami-stock-1y"),
+    formStock1m: document.getElementById("form-stock-1m"),
+    formStock3m: document.getElementById("form-stock-3m"),
+    formStock6m: document.getElementById("form-stock-6m"),
+    formStock1y: document.getElementById("form-stock-1y"),
   };
   async function fetchDashboardKpis() {
     try {
@@ -851,6 +880,23 @@ window.Subscriptions = (() => {
       kpiEls.anghami.textContent = j.anghami_spots ?? 0;
       kpiEls.chatgpt.textContent = j.chatgpt_spots ?? 0;
       kpiEls.orders.textContent = j.orders_24h ?? 0;
+
+      if (j.anghami_stock) {
+        const s1 = j.anghami_stock["1m"] ?? 0;
+        const s3 = j.anghami_stock["3m"] ?? 0;
+        const s6 = j.anghami_stock["6m"] ?? 0;
+        const sy = j.anghami_stock["1y"] ?? 0;
+
+        if (kpiEls.anghamiStock1m) kpiEls.anghamiStock1m.textContent = s1;
+        if (kpiEls.anghamiStock3m) kpiEls.anghamiStock3m.textContent = s3;
+        if (kpiEls.anghamiStock6m) kpiEls.anghamiStock6m.textContent = s6;
+        if (kpiEls.anghamiStock1y) kpiEls.anghamiStock1y.textContent = sy;
+
+        if (kpiEls.formStock1m) kpiEls.formStock1m.textContent = s1;
+        if (kpiEls.formStock3m) kpiEls.formStock3m.textContent = s3;
+        if (kpiEls.formStock6m) kpiEls.formStock6m.textContent = s6;
+        if (kpiEls.formStock1y) kpiEls.formStock1y.textContent = sy;
+      }
     } catch (e) {
       console.error("KPI error:", e);
     }
@@ -1501,7 +1547,38 @@ user: ${it.user}`;
             <th>Paid</th>
             <th>Actions</th>
           </tr>`;
-        const rows = data.unpaidGpts || [];
+        const EXCLUDED_DOMAINS = new Set([
+          "gmail.com",
+          "googlemail.com",
+          "hotmail.com",
+          "hotmail.co.uk",
+          "hotmail.fr",
+          "hotmail.es",
+          "outlook.com",
+          "outlook.sa",
+          "live.com",
+          "msn.com",
+          "yahoo.com",
+          "yahoo.co.uk",
+          "yahoo.fr",
+          "ymail.com",
+          "icloud.com",
+          "me.com",
+          "mac.com",
+          "aol.com",
+          "proton.me",
+          "protonmail.com",
+          "zoho.com",
+          "gmx.com",
+          "gmx.net",
+          "mail.com",
+        ]);
+        const rows = (data.unpaidGpts || []).filter(row => {
+          const email = String(row.accemail || "").trim().toLowerCase();
+          const parts = email.split("@");
+          const domain = parts.length > 1 ? parts.pop() : "";
+          return domain && !EXCLUDED_DOMAINS.has(domain);
+        });
         showCountBadge(`Unpaid GPT: ${rows.length} rows`, "fa-solid fa-robot");
         subscriptionTable.innerHTML = "";
         if (!rows.length) {

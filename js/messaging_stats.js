@@ -1,7 +1,7 @@
 /**
  * Messaging Stats Dashboard Module
  * Visualizes BSB WhatsApp messages, Meta Ad conversations, customer wait times,
- * and minute-by-minute employee productivity graphs.
+ * and continuous minute-by-minute employee productivity graphs in real time.
  */
 
 window.MessagingStats = (() => {
@@ -10,6 +10,8 @@ window.MessagingStats = (() => {
   let donutChart = null;
   let currentDate = null;
   let isSyncing = false;
+  let pollingTimer = null;
+  let isInitialized = false;
 
   const EMPLOYEE_COLORS = {
     "zouzou": { border: "#6366f1", bg: "rgba(99, 102, 241, 0.2)" },
@@ -29,6 +31,51 @@ window.MessagingStats = (() => {
     if (EMPLOYEE_COLORS[name]) return EMPLOYEE_COLORS[name];
     const c = FALLBACK_PALETTE[index % FALLBACK_PALETTE.length];
     return { border: c, bg: c + "33" };
+  }
+
+  function getBeirutTodayStr() {
+    try {
+      const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Beirut",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      });
+      return formatter.format(new Date());
+    } catch {
+      return new Date().toISOString().slice(0, 10);
+    }
+  }
+
+  function getBeirutYesterdayStr() {
+    try {
+      const d = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Beirut",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      });
+      return formatter.format(d);
+    } catch {
+      const d = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      return d.toISOString().slice(0, 10);
+    }
+  }
+
+  function getBeirutNowMinute() {
+    try {
+      const formatter = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Beirut",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      });
+      return formatter.format(new Date());
+    } catch {
+      const now = new Date();
+      return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    }
   }
 
   async function getAuthToken() {
@@ -119,7 +166,12 @@ window.MessagingStats = (() => {
 
     if (syncTimeEl && data.last_sync) {
       const syncDate = new Date(data.last_sync);
-      syncTimeEl.textContent = syncDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      // Format in Beirut timezone (+03:00) so it matches the data and live time 100%
+      syncTimeEl.textContent = syncDate.toLocaleTimeString("en-GB", {
+        timeZone: "Asia/Beirut",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
     }
   }
 
@@ -127,28 +179,25 @@ window.MessagingStats = (() => {
     const ctx = document.getElementById("employee-minute-chart");
     if (!ctx) return;
 
-    if (minuteChart) {
-      minuteChart.destroy();
-      minuteChart = null;
-    }
-
     if (!minuteData || minuteData.length === 0) {
-      // Empty state
+      if (minuteChart) {
+        minuteChart.destroy();
+        minuteChart = null;
+      }
       return;
     }
 
-    // Extract all unique sorted minutes and unique employees
-    const minuteSet = new Set();
+    // Extract unique employees and existing minutes
     const employeeSet = new Set();
+    const existingMinutes = [];
     minuteData.forEach(item => {
-      minuteSet.add(item.minute);
       employeeSet.add(item.employee);
+      existingMinutes.push(item.minute);
     });
 
-    const sortedMinutes = Array.from(minuteSet).sort();
     const employees = Array.from(employeeSet);
 
-    // Build data matrix: employee -> array of counts aligned to sortedMinutes
+    // Build data matrix: employee -> minute -> count
     const employeeMap = {};
     employees.forEach(emp => {
       employeeMap[emp] = {};
@@ -160,9 +209,43 @@ window.MessagingStats = (() => {
       }
     });
 
+    // Generate continuous minute timeline from earliest active hour to latest/now
+    existingMinutes.sort();
+    const firstActiveMin = existingMinutes[0] || "00:00";
+    let startH = Math.max(0, parseInt(firstActiveMin.split(":")[0], 10));
+    
+    // Start cleanly at full hour (e.g. 00:00, or first active hour)
+    let startMinStr = `${String(startH).padStart(2, '0')}:00`;
+
+    let lastActiveMin = existingMinutes[existingMinutes.length - 1] || "23:59";
+    const todayBeirut = getBeirutTodayStr();
+    const isToday = !currentDate || currentDate === todayBeirut;
+
+    let endMinStr = lastActiveMin;
+    if (isToday) {
+      const nowMin = getBeirutNowMinute();
+      if (nowMin > endMinStr) {
+        endMinStr = nowMin;
+      }
+    }
+
+    // Generate unbroken sequence of minutes
+    const allMinutes = [];
+    let [currH, currM] = startMinStr.split(":").map(Number);
+    const [targetEndH, targetEndM] = endMinStr.split(":").map(Number);
+
+    while (currH < targetEndH || (currH === targetEndH && currM <= targetEndM)) {
+      allMinutes.push(`${String(currH).padStart(2, '0')}:${String(currM).padStart(2, '0')}`);
+      currM++;
+      if (currM >= 60) {
+        currM = 0;
+        currH++;
+      }
+    }
+
     const datasets = employees.map((emp, idx) => {
       const color = getColorForEmployee(emp, idx);
-      const data = sortedMinutes.map(m => employeeMap[emp][m] || 0);
+      const data = allMinutes.map(m => employeeMap[emp][m] || 0);
 
       return {
         label: emp,
@@ -171,22 +254,31 @@ window.MessagingStats = (() => {
         backgroundColor: color.bg,
         borderWidth: 2,
         fill: false,
-        tension: 0.25,
-        pointRadius: 2,
+        tension: 0.2,
+        pointRadius: (ctxRef) => ((ctxRef.raw || 0) > 0 ? 3 : 0),
         pointHoverRadius: 6,
         pointBackgroundColor: color.border,
       };
     });
 
+    if (minuteChart) {
+      // Smooth in-place update without canvas destroy/rebuild
+      minuteChart.data.labels = allMinutes;
+      minuteChart.data.datasets = datasets;
+      minuteChart.update("none");
+      return;
+    }
+
     minuteChart = new Chart(ctx, {
       type: "line",
       data: {
-        labels: sortedMinutes,
+        labels: allMinutes,
         datasets: datasets
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
         interaction: {
           mode: "index",
           intersect: false
@@ -211,10 +303,11 @@ window.MessagingStats = (() => {
             padding: 12,
             boxPadding: 6,
             usePointStyle: true,
+            filter: (item) => Number(item.raw) > 0, // Only show agents who actually sent messages in that minute
             callbacks: {
-              title: (items) => `Time: ${items[0].label}`,
+              title: (items) => `Time: ${items[0]?.label || ""} (Beirut)`,
               footer: (items) => {
-                const total = items.reduce((sum, item) => sum + item.parsed.y, 0);
+                const total = items.reduce((sum, item) => sum + (Number(item.parsed?.y) || 0), 0);
                 return `Total Sent: ${total} msgs`;
               }
             }
@@ -227,7 +320,7 @@ window.MessagingStats = (() => {
               color: "#94a3b8",
               maxRotation: 0,
               autoSkip: true,
-              maxTicksLimit: 14,
+              maxTicksLimit: 16,
               font: { family: "Inter", size: 11 }
             }
           },
@@ -255,43 +348,54 @@ window.MessagingStats = (() => {
     const ctx = document.getElementById("hourly-traffic-chart");
     if (!ctx) return;
 
-    if (hourlyChart) {
-      hourlyChart.destroy();
-      hourlyChart = null;
+    if (!hourlyData || hourlyData.length === 0) {
+      if (hourlyChart) {
+        hourlyChart.destroy();
+        hourlyChart = null;
+      }
+      return;
     }
-
-    if (!hourlyData || hourlyData.length === 0) return;
 
     const labels = hourlyData.map(h => h.hour);
     const incomingData = hourlyData.map(h => h.incoming || 0);
     const outgoingData = hourlyData.map(h => h.outgoing || 0);
 
+    const datasets = [
+      {
+        label: "Incoming (Customer)",
+        data: incomingData,
+        backgroundColor: "rgba(16, 185, 129, 0.7)",
+        borderColor: "#10b981",
+        borderWidth: 1,
+        borderRadius: 4
+      },
+      {
+        label: "Outgoing (Agents)",
+        data: outgoingData,
+        backgroundColor: "rgba(99, 102, 241, 0.7)",
+        borderColor: "#6366f1",
+        borderWidth: 1,
+        borderRadius: 4
+      }
+    ];
+
+    if (hourlyChart) {
+      hourlyChart.data.labels = labels;
+      hourlyChart.data.datasets = datasets;
+      hourlyChart.update("none");
+      return;
+    }
+
     hourlyChart = new Chart(ctx, {
       type: "bar",
       data: {
         labels: labels,
-        datasets: [
-          {
-            label: "Incoming (Customer)",
-            data: incomingData,
-            backgroundColor: "rgba(16, 185, 129, 0.7)",
-            borderColor: "#10b981",
-            borderWidth: 1,
-            borderRadius: 4
-          },
-          {
-            label: "Outgoing (Agents)",
-            data: outgoingData,
-            backgroundColor: "rgba(99, 102, 241, 0.7)",
-            borderColor: "#6366f1",
-            borderWidth: 1,
-            borderRadius: 4
-          }
-        ]
+        datasets: datasets
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
         plugins: {
           legend: {
             position: "top",
@@ -324,31 +428,42 @@ window.MessagingStats = (() => {
     const ctx = document.getElementById("employee-donut-chart");
     if (!ctx) return;
 
-    if (donutChart) {
-      donutChart.destroy();
-      donutChart = null;
+    if (!employees || employees.length === 0) {
+      if (donutChart) {
+        donutChart.destroy();
+        donutChart = null;
+      }
+      return;
     }
-
-    if (!employees || employees.length === 0) return;
 
     const labels = employees.map(e => e.employee);
     const data = employees.map(e => e.sent_count);
     const colors = employees.map((e, idx) => getColorForEmployee(e.employee, idx).border);
 
+    const datasets = [{
+      data: data,
+      backgroundColor: colors,
+      borderColor: "#0f172a",
+      borderWidth: 2
+    }];
+
+    if (donutChart) {
+      donutChart.data.labels = labels;
+      donutChart.data.datasets = datasets;
+      donutChart.update("none");
+      return;
+    }
+
     donutChart = new Chart(ctx, {
       type: "doughnut",
       data: {
         labels: labels,
-        datasets: [{
-          data: data,
-          backgroundColor: colors,
-          borderColor: "#0f172a",
-          borderWidth: 2
-        }]
+        datasets: datasets
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
         plugins: {
           legend: {
             position: "right",
@@ -478,9 +593,9 @@ window.MessagingStats = (() => {
     }
   }
 
-  async function loadStats(dateStr = "") {
+  async function loadStats(dateStr = "", isSilent = false) {
     const loadingOverlay = document.getElementById("msg-stats-loading");
-    if (loadingOverlay) loadingOverlay.style.display = "flex";
+    if (loadingOverlay && !isSilent) loadingOverlay.style.display = "flex";
 
     try {
       currentDate = dateStr;
@@ -500,11 +615,45 @@ window.MessagingStats = (() => {
     } catch (err) {
       console.error("Error loading messaging stats:", err);
     } finally {
-      if (loadingOverlay) loadingOverlay.style.display = "none";
+      if (loadingOverlay && !isSilent) loadingOverlay.style.display = "none";
+    }
+  }
+
+  function startLivePolling() {
+    stopLivePolling();
+    // Live poll stats every 20 seconds so graph is ALWAYS 100% in sync with real time
+    pollingTimer = setInterval(() => {
+      if (document.hidden) return;
+      const statsPage = document.getElementById("messaging-stats-page");
+      if (!statsPage || !statsPage.classList.contains("active")) return;
+
+      const datePicker = document.getElementById("msg-date-picker");
+      const todayStr = getBeirutTodayStr();
+      const isToday = !datePicker || !datePicker.value || datePicker.value === todayStr;
+
+      if (isToday) {
+        loadStats(currentDate, true); // silent background reload
+      }
+    }, 20000);
+  }
+
+  function stopLivePolling() {
+    if (pollingTimer) {
+      clearInterval(pollingTimer);
+      pollingTimer = null;
     }
   }
 
   function init() {
+    startLivePolling();
+
+    if (isInitialized) {
+      // If already initialized, just reload stats for current view
+      loadStats(currentDate);
+      return;
+    }
+    isInitialized = true;
+
     const datePicker = document.getElementById("msg-date-picker");
     const refreshBtn = document.getElementById("msg-refresh-btn");
     const syncBtn = document.getElementById("msg-sync-now-btn");
@@ -532,7 +681,7 @@ window.MessagingStats = (() => {
 
     if (todayQuickBtn) {
       todayQuickBtn.addEventListener("click", () => {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = getBeirutTodayStr();
         if (datePicker) datePicker.value = today;
         loadStats(today);
       });
@@ -540,12 +689,15 @@ window.MessagingStats = (() => {
 
     if (yesterdayQuickBtn) {
       yesterdayQuickBtn.addEventListener("click", () => {
-        const d = new Date();
-        d.setUTCDate(d.getUTCDate() - 1);
-        const yest = d.toISOString().slice(0, 10);
+        const yest = getBeirutYesterdayStr();
         if (datePicker) datePicker.value = yest;
         loadStats(yest);
       });
+    }
+
+    // Set initial date picker value to Beirut today
+    if (datePicker && !datePicker.value) {
+      datePicker.value = getBeirutTodayStr();
     }
 
     loadStats();
@@ -554,6 +706,8 @@ window.MessagingStats = (() => {
   return {
     init,
     loadStats,
-    syncBSBNow
+    syncBSBNow,
+    startLivePolling,
+    stopLivePolling
   };
 })();

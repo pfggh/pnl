@@ -47,9 +47,23 @@
         </header>
 
         <div id="kpi-bar" class="grid-kpi">
-          <div class="kpi-card">
+          <div class="kpi-card" id="kpi-card-anghami">
             <span class="kpi-label"><i class="fa-solid fa-music" style="color: #10b981;"></i> Anghami Ready</span>
             <span class="kpi-value" id="kpi-anghami">—</span>
+            <div id="anghami-stock-breakdown" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:14px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.07);">
+              <span class="anghami-stock-badge" title="Stock valid for 1 Month" style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.25); color:#10b981; padding:3px 8px; border-radius:6px; font-size:0.75rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+                <span style="opacity:0.8; font-weight:600;">1m:</span><span id="anghami-stock-1m">—</span>
+              </span>
+              <span class="anghami-stock-badge" title="Stock valid for 3 Months" style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.25); color:#10b981; padding:3px 8px; border-radius:6px; font-size:0.75rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+                <span style="opacity:0.8; font-weight:600;">3m:</span><span id="anghami-stock-3m">—</span>
+              </span>
+              <span class="anghami-stock-badge" title="Stock valid for 6 Months" style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.25); color:#10b981; padding:3px 8px; border-radius:6px; font-size:0.75rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+                <span style="opacity:0.8; font-weight:600;">6m:</span><span id="anghami-stock-6m">—</span>
+              </span>
+              <span class="anghami-stock-badge" title="Stock valid for 1 Year (12 Months)" style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.25); color:#10b981; padding:3px 8px; border-radius:6px; font-size:0.75rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+                <span style="opacity:0.8; font-weight:600;">1y:</span><span id="anghami-stock-1y">—</span>
+              </span>
+            </div>
           </div>
           <div class="kpi-card">
             <span class="kpi-label"><i class="fa-solid fa-robot" style="color: #6366f1;"></i> GPT Ready</span>
@@ -88,6 +102,28 @@
                   <option value="6">6 Months</option>
                   <option value="12">12 Months</option>
                 </datalist>
+              </div>
+
+              <!-- Quick stock shower chips for Anghami -->
+              <div id="form-anghami-stock" style="display:none; margin-top:-8px; margin-bottom:12px; font-size:0.8rem; background:rgba(16,185,129,0.06); border:1px dashed rgba(16,185,129,0.3); border-radius:8px; padding:8px 12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <span style="color:var(--text-muted); font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;"><i class="fa-solid fa-music" style="color:#10b981;"></i> Anghami Available Stock</span>
+                  <span style="font-size:0.7rem; color:var(--text-muted);">click to set</span>
+                </div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <button type="button" class="form-stock-chip" data-months="1" style="background:rgba(255,255,255,0.05); border:1px solid rgba(16,185,129,0.3); color:#fff; border-radius:6px; padding:3px 10px; font-size:0.75rem; cursor:pointer; display:flex; align-items:center; gap:5px; transition:all 0.2s;">
+                    <strong>1M:</strong> <span id="form-stock-1m" style="color:#10b981; font-weight:700;">—</span>
+                  </button>
+                  <button type="button" class="form-stock-chip" data-months="3" style="background:rgba(255,255,255,0.05); border:1px solid rgba(16,185,129,0.3); color:#fff; border-radius:6px; padding:3px 10px; font-size:0.75rem; cursor:pointer; display:flex; align-items:center; gap:5px; transition:all 0.2s;">
+                    <strong>3M:</strong> <span id="form-stock-3m" style="color:#10b981; font-weight:700;">—</span>
+                  </button>
+                  <button type="button" class="form-stock-chip" data-months="6" style="background:rgba(255,255,255,0.05); border:1px solid rgba(16,185,129,0.3); color:#fff; border-radius:6px; padding:3px 10px; font-size:0.75rem; cursor:pointer; display:flex; align-items:center; gap:5px; transition:all 0.2s;">
+                    <strong>6M:</strong> <span id="form-stock-6m" style="color:#10b981; font-weight:700;">—</span>
+                  </button>
+                  <button type="button" class="form-stock-chip" data-months="12" style="background:rgba(255,255,255,0.05); border:1px solid rgba(16,185,129,0.3); color:#fff; border-radius:6px; padding:3px 10px; font-size:0.75rem; cursor:pointer; display:flex; align-items:center; gap:5px; transition:all 0.2s;">
+                    <strong>1Y:</strong> <span id="form-stock-1y" style="color:#10b981; font-weight:700;">—</span>
+                  </button>
+                </div>
               </div>
 
               <button type="submit" id="submit-btn" style="width: 100%;">
@@ -471,7 +507,7 @@
           <div class="kpi-card">
             <span class="kpi-label"><i class="fa-solid fa-clock-rotate-left" style="color: #a855f7;"></i> Last Sync</span>
             <span class="kpi-value" id="msg-kpi-sync-time" style="font-size: 1.8rem;">—</span>
-            <div style="font-size: 0.82rem; margin-top: 10px; color: #10b981;">Auto-synced via BSB</div>
+            <div style="font-size: 0.82rem; margin-top: 10px; color: #10b981; display:flex; align-items:center; gap:6px;"><span style="width:7px; height:7px; border-radius:50%; background:#10b981; display:inline-block; box-shadow:0 0 8px #10b981;"></span> Live (auto-synced every 2m)</div>
           </div>
         </div>
 
