@@ -5,7 +5,8 @@
  */
 
 window.MessagingStats = (() => {
-  let minuteChart = null;
+  let uplotChart = null; // High-performance telemetry engine
+  let minuteChart = null; // Deprecated Chart.js fallback if uPlot unavailable
   let hourlyChart = null;
   let donutChart = null;
   let currentDate = null;
@@ -13,13 +14,12 @@ window.MessagingStats = (() => {
   let pollingTimer = null;
   let isInitialized = false;
 
-  // Modern scrollable graph state
+  // Modern telemetry & agent filter state
   let rawMinuteData = [];
   let currentWindow = "60"; // '30', '60', '180', 'all'
-  let pxPerMinute = 10; // Controls horizontal density / scroll width
-  let isDraggingViewport = false;
-  let dragStartX = 0;
-  let dragScrollLeft = 0;
+  let allEmployeesList = [];
+  let selectedAgents = new Set(); // Empty or size == all means show all; else only show checked
+  let tooltipEl = null;
 
   const EMPLOYEE_COLORS = {
     "zouzou": { border: "#6366f1", bg: "rgba(99, 102, 241, 0.2)" },
@@ -183,34 +183,71 @@ window.MessagingStats = (() => {
     }
   }
 
-  function updateMinuteGraphLayout(numMinutes) {
-    const wrapper = document.getElementById("minute-chart-canvas-wrapper");
-    const viewport = document.getElementById("minute-chart-viewport");
-    if (!wrapper || !viewport) return;
+  function renderAgentPicker(employees, employeeMap) {
+    const chipsWrapper = document.getElementById("agent-chips-wrapper");
+    if (!chipsWrapper) return;
 
-    const viewportWidth = viewport.clientWidth || 900;
-    // Cap max width to prevent giant multi-thousand pixel canvas surfaces in Firefox
-    const targetWidth = Math.max(viewportWidth, Math.min(3200, numMinutes * pxPerMinute));
-    if (wrapper.style.width !== `${targetWidth}px`) {
-      wrapper.style.width = `${targetWidth}px`;
-    }
+    // Preserve any existing selections or default to empty (which implies ALL active)
+    chipsWrapper.innerHTML = "";
 
-    if (minuteChart) {
-      minuteChart.resize();
-    }
+    employees.forEach((emp, idx) => {
+      const color = getColorForEmployee(emp, idx);
+      const isSelected = selectedAgents.size === 0 || selectedAgents.has(emp);
+
+      // Compute total messages sent by this employee today
+      let totalSent = 0;
+      if (employeeMap && employeeMap[emp]) {
+        totalSent = Object.values(employeeMap[emp]).reduce((a, b) => a + b, 0);
+      }
+
+      const chip = document.createElement("div");
+      chip.className = `agent-chip ${isSelected ? "active" : ""}`;
+      chip.style.setProperty("--chip-color", color.border);
+      chip.setAttribute("data-agent", emp);
+
+      chip.innerHTML = `
+        <span class="chip-dot"></span>
+        <span>${emp}</span>
+        <span class="chip-count">${totalSent}</span>
+      `;
+
+      chip.addEventListener("click", () => {
+        // If clicking on an agent
+        if (selectedAgents.size === 0) {
+          // Previously all were active -> select ONLY this clicked agent
+          selectedAgents.clear();
+          selectedAgents.add(emp);
+        } else if (selectedAgents.has(emp)) {
+          selectedAgents.delete(emp);
+          // If none left selected, reset to all
+          if (selectedAgents.size === 0) {
+            // Keep empty (means all)
+          }
+        } else {
+          selectedAgents.add(emp);
+          if (selectedAgents.size === allEmployeesList.length) {
+            selectedAgents.clear(); // all selected
+          }
+        }
+        updateAgentChipStates();
+        renderMinuteByEmployeeChart();
+      });
+
+      chipsWrapper.appendChild(chip);
+    });
   }
 
-  function scrollMinuteChartToLatest(smooth = true) {
-    const viewport = document.getElementById("minute-chart-viewport");
-    if (!viewport) return;
-    try {
-      viewport.scrollTo({
-        left: viewport.scrollWidth - viewport.clientWidth,
-        behavior: smooth ? "smooth" : "auto"
-      });
-    } catch {
-      viewport.scrollLeft = viewport.scrollWidth;
-    }
+  function updateAgentChipStates() {
+    const chips = document.querySelectorAll(".agent-chip");
+    chips.forEach(chip => {
+      const agent = chip.getAttribute("data-agent");
+      const isSelected = selectedAgents.size === 0 || selectedAgents.has(agent);
+      if (isSelected) {
+        chip.classList.add("active");
+      } else {
+        chip.classList.remove("active");
+      }
+    });
   }
 
   function renderMinuteByEmployeeChart(minuteData) {
@@ -218,14 +255,15 @@ window.MessagingStats = (() => {
       rawMinuteData = minuteData || [];
     }
 
-    const ctx = document.getElementById("employee-minute-chart");
-    if (!ctx) return;
+    const container = document.getElementById("uplot-chart-container");
+    if (!container) return;
 
     if (!rawMinuteData || rawMinuteData.length === 0) {
-      if (minuteChart) {
-        minuteChart.destroy();
-        minuteChart = null;
+      if (uplotChart) {
+        uplotChart.destroy();
+        uplotChart = null;
       }
+      container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:0.9rem;">No minute activity recorded for this period.</div>';
       return;
     }
 
@@ -238,6 +276,7 @@ window.MessagingStats = (() => {
     });
 
     const employees = Array.from(employeeSet);
+    allEmployeesList = employees;
 
     // Build data map: employee -> minute -> count
     const employeeMap = {};
@@ -250,6 +289,9 @@ window.MessagingStats = (() => {
         employeeMap[item.employee][item.minute] = item.count;
       }
     });
+
+    // Update Agent Picker Chips
+    renderAgentPicker(employees, employeeMap);
 
     // Generate unbroken sequence of minutes
     existingMinutes.sort();
@@ -282,7 +324,7 @@ window.MessagingStats = (() => {
       }
     }
 
-    // If a time window is selected (30m, 1h, 3h), slice the timeline to the latest window
+    // Filter by Time Window Preset
     if (currentWindow !== "all") {
       const windowSize = parseInt(currentWindow, 10);
       if (windowSize && allMinutes.length > windowSize) {
@@ -290,136 +332,169 @@ window.MessagingStats = (() => {
       }
     }
 
-    // Update layout width
-    updateMinuteGraphLayout(allMinutes.length);
-
-    const datasets = employees.map((emp, idx) => {
-      const color = getColorForEmployee(emp, idx);
-      const data = allMinutes.map(m => employeeMap[emp][m] || 0);
-
-      return {
-        label: emp,
-        data: data,
-        borderColor: color.border,
-        backgroundColor: color.bg,
-        borderWidth: 2,
-        fill: false, // Disabling polygon fill eliminates expensive compositing in Firefox
-        tension: 0.1, // Near-linear interpolation is 10x faster than heavy bezier curves
-        pointRadius: 0, // No per-point function calls on every frame
-        pointHoverRadius: 5,
-        pointHitRadius: 8,
-        pointBackgroundColor: color.border,
-      };
+    // Convert minutes into epoch timestamps (seconds) for uPlot x-axis
+    // Use target date or today's date base
+    const baseDateStr = currentDate || todayBeirut;
+    const timestamps = allMinutes.map(m => {
+      const [h, min] = m.split(":").map(Number);
+      return Math.floor(new Date(`${baseDateStr}T${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}:00+03:00`).getTime() / 1000);
     });
 
-    if (minuteChart) {
-      minuteChart.data.labels = allMinutes;
-      minuteChart.data.datasets = datasets;
-      minuteChart.update("none");
-      return;
-    }
+    // Determine active visible employees based on Agent Picker
+    const visibleEmployees = employees.filter(emp => selectedAgents.size === 0 || selectedAgents.has(emp));
 
-    minuteChart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: allMinutes,
-        datasets: datasets
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        normalized: true,
-        spanGaps: true,
-        events: ["mousemove", "mouseout", "click", "touchstart", "touchmove"],
-        interaction: {
-          mode: "index",
-          intersect: false,
-          axis: "x"
-        },
-        hover: {
-          mode: "index",
-          intersect: false,
-          animationDuration: 0
-        },
-        elements: {
-          point: { radius: 0, hoverRadius: 5 },
-          line: { tension: 0.1, borderWidth: 2 }
-        },
-        plugins: {
-          legend: {
-            position: "top",
-            labels: {
-              color: "#cbd5e1",
-              font: { family: "Inter", size: 12, weight: "500" },
-              boxWidth: 10,
-              boxHeight: 10,
-              usePointStyle: true,
-              padding: 16
-            }
-          },
-          tooltip: {
-            enabled: true,
-            animation: { duration: 0 },
-            backgroundColor: "rgba(15, 23, 42, 0.96)",
-            titleColor: "#f8fafc",
-            titleFont: { family: "Inter", size: 12, weight: "600" },
-            bodyColor: "#cbd5e1",
-            bodyFont: { family: "Inter", size: 11 },
-            borderColor: "rgba(255, 255, 255, 0.12)",
-            borderWidth: 1,
-            padding: 10,
-            boxPadding: 4,
-            cornerRadius: 8,
-            usePointStyle: true,
-            filter: (item) => Number(item.raw) > 0, // Only show agents who were active in that minute
-            callbacks: {
-              title: (items) => `⏱ ${items[0]?.label || ""} (Beirut)`,
-              footer: (items) => {
-                const total = items.reduce((sum, item) => sum + (Number(item.parsed?.y) || 0), 0);
-                return `Total Sent: ${total} msgs`;
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: {
-              color: "rgba(255, 255, 255, 0.04)",
-              drawBorder: false
-            },
-            ticks: {
-              color: "#94a3b8",
-              maxRotation: 0,
-              autoSkip: true,
-              maxTicksLimit: 14,
-              font: { family: "Inter", size: 11 }
-            }
-          },
-          y: {
-            beginAtZero: true,
-            grid: {
-              color: "rgba(255, 255, 255, 0.05)",
-              drawBorder: false
-            },
-            ticks: {
-              color: "#94a3b8",
-              precision: 0,
-              font: { family: "Inter", size: 11 }
-            },
-            title: {
-              display: true,
-              text: "Messages / Min",
-              color: "#64748b",
-              font: { size: 11, weight: "500" }
-            }
-          }
+    // Construct columnar data array: [timestamps, employee1_data, employee2_data, ...]
+    const uPlotData = [timestamps];
+    const seriesConfig = [
+      {
+        label: "Time",
+        value: (self, rawValue) => {
+          if (!rawValue) return "";
+          const d = new Date(rawValue * 1000);
+          return d.toLocaleTimeString("en-GB", { timeZone: "Asia/Beirut", hour: "2-digit", minute: "2-digit" });
         }
       }
+    ];
+
+    visibleEmployees.forEach((emp) => {
+      const originalIdx = employees.indexOf(emp);
+      const color = getColorForEmployee(emp, originalIdx);
+      const dataArr = allMinutes.map(m => employeeMap[emp][m] || 0);
+      uPlotData.push(dataArr);
+
+      seriesConfig.push({
+        label: emp,
+        stroke: color.border,
+        width: 2,
+        fill: color.bg, // uPlot canvas fill is hardware-native & 0-lag
+        points: {
+          show: false, // Hidden by default for max performance; cursor hover highlights
+          size: 6
+        },
+        spanGaps: true
+      });
     });
 
-    // Auto-scroll viewport to the latest minute on initial build
-    setTimeout(() => scrollMinuteChartToLatest(false), 50);
+    // Clean placeholder container
+    container.innerHTML = "";
+
+    // Tooltip Element setup
+    if (!tooltipEl) {
+      tooltipEl = document.createElement("div");
+      tooltipEl.className = "uplot-tooltip";
+      tooltipEl.style.display = "none";
+      document.body.appendChild(tooltipEl);
+    }
+
+    const opts = {
+      width: container.clientWidth || 900,
+      height: 380,
+      cursor: {
+        drag: { x: true, y: false },
+        sync: { key: "msg-sync" },
+        points: {
+          size: 7,
+          fill: (u, seriesIdx) => seriesConfig[seriesIdx].stroke
+        }
+      },
+      select: {
+        show: false
+      },
+      legend: {
+        show: false // Our Agent Picker serves as the interactive legend
+      },
+      hooks: {
+        setCursor: [
+          (u) => {
+            const { left, top, idx } = u.cursor;
+            if (idx == null) {
+              tooltipEl.style.display = "none";
+              return;
+            }
+
+            const bbox = u.over.getBoundingClientRect();
+            const timeVal = allMinutes[idx] || "";
+            let html = `<div class="tt-time"><i class="fa-solid fa-clock"></i> ⏱ ${timeVal} (Beirut)</div>`;
+            let total = 0;
+            let activeAgentsCount = 0;
+
+            visibleEmployees.forEach((emp, i) => {
+              const val = uPlotData[i + 1][idx] || 0;
+              if (val > 0) {
+                activeAgentsCount++;
+                total += val;
+                const originalIdx = employees.indexOf(emp);
+                const col = getColorForEmployee(emp, originalIdx);
+                html += `
+                  <div class="tt-row">
+                    <span class="tt-dot" style="background:${col.border};box-shadow:0 0 6px ${col.border}"></span>
+                    <span class="tt-name">${emp}:</span>
+                    <span class="tt-val">${val} msgs</span>
+                  </div>
+                `;
+              }
+            });
+
+            if (activeAgentsCount === 0) {
+              html += `<div style="color:var(--text-muted);font-size:0.75rem;padding:2px 0;">No messages sent</div>`;
+            } else {
+              html += `<div style="margin-top:6px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.1);font-weight:700;color:#10b981;display:flex;justify-content:space-between;"><span>Total Sent:</span><span>${total} msgs</span></div>`;
+            }
+
+            tooltipEl.innerHTML = html;
+            tooltipEl.style.display = "block";
+
+            // Position tooltip relative to viewport
+            const ttWidth = tooltipEl.offsetWidth;
+            let posX = bbox.left + left + 15;
+            if (posX + ttWidth > window.innerWidth - 20) {
+              posX = bbox.left + left - ttWidth - 15;
+            }
+            let posY = bbox.top + top - 30;
+            if (posY < 10) posY = bbox.top + top + 20;
+
+            tooltipEl.style.left = `${posX}px`;
+            tooltipEl.style.top = `${posY}px`;
+          }
+        ]
+      },
+      scales: {
+        x: {
+          time: true
+        },
+        y: {
+          auto: true,
+          range: (u, min, max) => [0, Math.max(5, Math.ceil(max * 1.15))]
+        }
+      },
+      axes: [
+        {
+          stroke: "#94a3b8",
+          grid: { stroke: "rgba(255, 255, 255, 0.04)", width: 1 },
+          ticks: { stroke: "rgba(255, 255, 255, 0.08)", width: 1 },
+          font: "11px Inter, sans-serif",
+          values: (u, vals) => {
+            return vals.map(v => {
+              const d = new Date(v * 1000);
+              return d.toLocaleTimeString("en-GB", { timeZone: "Asia/Beirut", hour: "2-digit", minute: "2-digit" });
+            });
+          }
+        },
+        {
+          stroke: "#94a3b8",
+          grid: { stroke: "rgba(255, 255, 255, 0.04)", width: 1 },
+          ticks: { stroke: "rgba(255, 255, 255, 0.08)", width: 1 },
+          font: "11px Inter, sans-serif",
+          size: 40
+        }
+      ],
+      series: seriesConfig
+    };
+
+    if (uplotChart) {
+      uplotChart.destroy();
+    }
+    uplotChart = new uPlot(opts, uPlotData, container);
   }
 
   function renderHourlyChart(hourlyData) {
@@ -785,11 +860,33 @@ window.MessagingStats = (() => {
   }
 
   function setupMinuteGraphControls() {
-    const viewport = document.getElementById("minute-chart-viewport");
     const zoomInBtn = document.getElementById("chart-zoom-in-btn");
     const zoomOutBtn = document.getElementById("chart-zoom-out-btn");
     const scrollNowBtn = document.getElementById("chart-scroll-now-btn");
     const windowPills = document.querySelectorAll(".chart-window-pill");
+    const selectAllBtn = document.getElementById("agent-picker-all-btn");
+    const clearBtn = document.getElementById("agent-picker-none-btn");
+
+    // Agent Picker quick links
+    if (selectAllBtn) {
+      selectAllBtn.addEventListener("click", () => {
+        selectedAgents.clear(); // Empty set represents all active
+        updateAgentChipStates();
+        renderMinuteByEmployeeChart();
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        // When cleared, select the top agent only so the graph is never blank
+        if (allEmployeesList.length > 0) {
+          selectedAgents.clear();
+          selectedAgents.add(allEmployeesList[0]);
+        }
+        updateAgentChipStates();
+        renderMinuteByEmployeeChart();
+      });
+    }
 
     // Window preset buttons (30m, 1h, 3h, All Day)
     windowPills.forEach(pill => {
@@ -798,61 +895,59 @@ window.MessagingStats = (() => {
         pill.classList.add("active");
         currentWindow = pill.getAttribute("data-window") || "all";
         renderMinuteByEmployeeChart();
-        setTimeout(() => scrollMinuteChartToLatest(true), 60);
       });
     });
 
-    // Zoom controls: adjusts pxPerMinute density smoothly
+    // Zoom In: zoom in on active view
     if (zoomInBtn) {
       zoomInBtn.addEventListener("click", () => {
-        pxPerMinute = Math.min(32, pxPerMinute + 4);
-        renderMinuteByEmployeeChart();
-      });
-    }
-
-    if (zoomOutBtn) {
-      zoomOutBtn.addEventListener("click", () => {
-        pxPerMinute = Math.max(4, pxPerMinute - 4);
-        renderMinuteByEmployeeChart();
-      });
-    }
-
-    // Scroll to latest minute button
-    if (scrollNowBtn) {
-      scrollNowBtn.addEventListener("click", () => {
-        scrollMinuteChartToLatest(true);
-      });
-    }
-
-    // Click & Drag-to-scroll functionality with rAF throttling for buttery 60+ FPS
-    if (viewport) {
-      let rAF = null;
-      viewport.addEventListener("mousedown", (e) => {
-        isDraggingViewport = true;
-        viewport.style.cursor = "grabbing";
-        dragStartX = e.pageX - viewport.offsetLeft;
-        dragScrollLeft = viewport.scrollLeft;
-      });
-
-      window.addEventListener("mouseup", () => {
-        if (isDraggingViewport) {
-          isDraggingViewport = false;
-          if (viewport) viewport.style.cursor = "default";
-          if (rAF) cancelAnimationFrame(rAF);
+        if (!uplotChart) return;
+        const [min, max] = [uplotChart.scales.x.min, uplotChart.scales.x.max];
+        const range = max - min;
+        if (range > 300) { // minimum 5 mins
+          const newMin = min + range * 0.2;
+          const newMax = max - range * 0.2;
+          uplotChart.setScale("x", { min: newMin, max: newMax });
         }
       });
+    }
 
-      viewport.addEventListener("mousemove", (e) => {
-        if (!isDraggingViewport) return;
-        e.preventDefault();
-        const x = e.pageX - viewport.offsetLeft;
-        const walk = (x - dragStartX) * 1.5;
-        if (rAF) cancelAnimationFrame(rAF);
-        rAF = requestAnimationFrame(() => {
-          viewport.scrollLeft = dragScrollLeft - walk;
-        });
+    // Zoom Out: zoom out on active view
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener("click", () => {
+        if (!uplotChart) return;
+        const [min, max] = [uplotChart.scales.x.min, uplotChart.scales.x.max];
+        const range = max - min;
+        const newMin = min - range * 0.25;
+        const newMax = max + range * 0.25;
+        uplotChart.setScale("x", { min: newMin, max: newMax });
       });
     }
+
+    // Jump to latest activity button
+    if (scrollNowBtn) {
+      scrollNowBtn.addEventListener("click", () => {
+        if (currentWindow !== "60") {
+          currentWindow = "60";
+          windowPills.forEach(p => {
+            if (p.getAttribute("data-window") === "60") p.classList.add("active");
+            else p.classList.remove("active");
+          });
+        }
+        renderMinuteByEmployeeChart();
+      });
+    }
+
+    // Auto-resize uPlot on window resize
+    window.addEventListener("resize", () => {
+      const container = document.getElementById("uplot-chart-container");
+      if (container && uplotChart) {
+        uplotChart.setSize({
+          width: container.clientWidth || 900,
+          height: 380
+        });
+      }
+    });
   }
 
   return {

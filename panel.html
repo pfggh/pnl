@@ -9,8 +9,10 @@
   <link rel="stylesheet" href="css/style.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
 </head>
 
 <body>
@@ -513,18 +515,18 @@
 
         <!-- MAIN GRAPH: Employee Activity Minute-by-Minute -->
         <div class="panel-container" style="padding: 26px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 14px;">
             <div>
               <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
                 <h2 class="section-title" style="margin-bottom: 0;">
-                  <i class="fa-solid fa-chart-line"></i> Messages by Employee (Minute-by-Minute)
+                  <i class="fa-solid fa-chart-line"></i> Employee Activity Timeline
                 </h2>
                 <div id="msg-graph-live-badge" class="chart-live-ticker">
                   <span class="ticker-dot"></span> Live Timeline
                 </div>
               </div>
               <p style="color: var(--text-muted); font-size: 0.88rem;">
-                Continuous timeline with per-agent activity bursts. Drag or scroll horizontally to inspect specific minutes.
+                Analog-style continuous telemetry tracking minute-by-minute messages. Drag horizontal band to pan, scroll to zoom.
               </p>
             </div>
             <!-- Interactive Graph Controls -->
@@ -536,25 +538,39 @@
                 <button class="chart-window-pill" data-window="180">3h</button>
                 <button class="chart-window-pill" data-window="all">All Day</button>
               </div>
-              <!-- Zoom In/Out & Scroll Buttons -->
+              <!-- Zoom & Reset -->
               <div style="display: flex; gap: 6px;">
-                <button id="chart-zoom-out-btn" class="chart-btn-icon" title="Zoom Out (Compact View)">
+                <button id="chart-zoom-out-btn" class="chart-btn-icon" title="Zoom Out">
                   <i class="fa-solid fa-magnifying-glass-minus"></i>
                 </button>
-                <button id="chart-zoom-in-btn" class="chart-btn-icon" title="Zoom In (High Detail View)">
+                <button id="chart-zoom-in-btn" class="chart-btn-icon" title="Zoom In">
                   <i class="fa-solid fa-magnifying-glass-plus"></i>
                 </button>
-                <button id="chart-scroll-now-btn" class="chart-btn-icon" title="Scroll to Latest Minute" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+                <button id="chart-scroll-now-btn" class="chart-btn-icon" title="Jump to Latest Activity" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
                   <i class="fa-solid fa-angles-right"></i> Latest
                 </button>
               </div>
             </div>
           </div>
-          <!-- Scrollable Viewport Wrapper -->
-          <div class="minute-chart-viewport" id="minute-chart-viewport">
-            <div class="minute-chart-canvas-wrapper" id="minute-chart-canvas-wrapper">
-              <canvas id="employee-minute-chart"></canvas>
+
+          <!-- AGENT BY AGENT PICKER -->
+          <div class="agent-picker-container" id="agent-picker-container">
+            <div class="agent-picker-header">
+              <span class="agent-picker-label"><i class="fa-solid fa-users-viewfinder"></i> Filter by Agent:</span>
+              <div class="agent-picker-quick-actions">
+                <button type="button" id="agent-picker-all-btn" class="agent-quick-link">Select All</button>
+                <span style="color: var(--border);">|</span>
+                <button type="button" id="agent-picker-none-btn" class="agent-quick-link">Clear</button>
+              </div>
             </div>
+            <div class="agent-chips-wrapper" id="agent-chips-wrapper">
+              <!-- Populated dynamically with agent chips -->
+            </div>
+          </div>
+
+          <!-- Analog Telemetry Graph Container -->
+          <div class="uplot-chart-container" id="uplot-chart-container">
+            <!-- uPlot renders here -->
           </div>
         </div>
 
