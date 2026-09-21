@@ -13,6 +13,14 @@ window.MessagingStats = (() => {
   let pollingTimer = null;
   let isInitialized = false;
 
+  // Modern scrollable graph state
+  let rawMinuteData = [];
+  let currentWindow = "all"; // '30', '60', '180', 'all'
+  let pxPerMinute = 12; // Controls horizontal density / scroll width
+  let isDraggingViewport = false;
+  let dragStartX = 0;
+  let dragScrollLeft = 0;
+
   const EMPLOYEE_COLORS = {
     "zouzou": { border: "#6366f1", bg: "rgba(99, 102, 241, 0.2)" },
     "bouery": { border: "#a855f7", bg: "rgba(168, 85, 247, 0.2)" },
@@ -175,11 +183,43 @@ window.MessagingStats = (() => {
     }
   }
 
+  function updateMinuteGraphLayout(numMinutes) {
+    const wrapper = document.getElementById("minute-chart-canvas-wrapper");
+    const viewport = document.getElementById("minute-chart-viewport");
+    if (!wrapper || !viewport) return;
+
+    const viewportWidth = viewport.clientWidth || 900;
+    // Calculate required width based on pxPerMinute zoom
+    const targetWidth = Math.max(viewportWidth, numMinutes * pxPerMinute);
+    wrapper.style.width = `${targetWidth}px`;
+
+    if (minuteChart) {
+      minuteChart.resize();
+    }
+  }
+
+  function scrollMinuteChartToLatest(smooth = true) {
+    const viewport = document.getElementById("minute-chart-viewport");
+    if (!viewport) return;
+    try {
+      viewport.scrollTo({
+        left: viewport.scrollWidth - viewport.clientWidth,
+        behavior: smooth ? "smooth" : "auto"
+      });
+    } catch {
+      viewport.scrollLeft = viewport.scrollWidth;
+    }
+  }
+
   function renderMinuteByEmployeeChart(minuteData) {
+    if (minuteData !== undefined) {
+      rawMinuteData = minuteData || [];
+    }
+
     const ctx = document.getElementById("employee-minute-chart");
     if (!ctx) return;
 
-    if (!minuteData || minuteData.length === 0) {
+    if (!rawMinuteData || rawMinuteData.length === 0) {
       if (minuteChart) {
         minuteChart.destroy();
         minuteChart = null;
@@ -187,34 +227,32 @@ window.MessagingStats = (() => {
       return;
     }
 
-    // Extract unique employees and existing minutes
+    // Extract unique employees and recorded minutes
     const employeeSet = new Set();
     const existingMinutes = [];
-    minuteData.forEach(item => {
+    rawMinuteData.forEach(item => {
       employeeSet.add(item.employee);
       existingMinutes.push(item.minute);
     });
 
     const employees = Array.from(employeeSet);
 
-    // Build data matrix: employee -> minute -> count
+    // Build data map: employee -> minute -> count
     const employeeMap = {};
     employees.forEach(emp => {
       employeeMap[emp] = {};
     });
 
-    minuteData.forEach(item => {
+    rawMinuteData.forEach(item => {
       if (employeeMap[item.employee]) {
         employeeMap[item.employee][item.minute] = item.count;
       }
     });
 
-    // Generate continuous minute timeline from earliest active hour to latest/now
+    // Generate unbroken sequence of minutes
     existingMinutes.sort();
     const firstActiveMin = existingMinutes[0] || "00:00";
     let startH = Math.max(0, parseInt(firstActiveMin.split(":")[0], 10));
-    
-    // Start cleanly at full hour (e.g. 00:00, or first active hour)
     let startMinStr = `${String(startH).padStart(2, '0')}:00`;
 
     let lastActiveMin = existingMinutes[existingMinutes.length - 1] || "23:59";
@@ -229,8 +267,7 @@ window.MessagingStats = (() => {
       }
     }
 
-    // Generate unbroken sequence of minutes
-    const allMinutes = [];
+    let allMinutes = [];
     let [currH, currM] = startMinStr.split(":").map(Number);
     const [targetEndH, targetEndM] = endMinStr.split(":").map(Number);
 
@@ -243,26 +280,55 @@ window.MessagingStats = (() => {
       }
     }
 
+    // If a time window is selected (30m, 1h, 3h), slice the timeline to the latest window
+    if (currentWindow !== "all") {
+      const windowSize = parseInt(currentWindow, 10);
+      if (windowSize && allMinutes.length > windowSize) {
+        allMinutes = allMinutes.slice(-windowSize);
+      }
+    }
+
+    // Update width for smooth horizontal scrollability without lagging JS
+    updateMinuteGraphLayout(allMinutes.length);
+
+    // Create lightweight gradient helper cache
+    const chartAreaHeight = 350;
+    const canvasContext = ctx.getContext("2d");
+
     const datasets = employees.map((emp, idx) => {
       const color = getColorForEmployee(emp, idx);
       const data = allMinutes.map(m => employeeMap[emp][m] || 0);
+
+      // Gradient fill under curves for high-end look
+      let bgGradient = color.bg;
+      if (canvasContext) {
+        try {
+          const grad = canvasContext.createLinearGradient(0, 0, 0, chartAreaHeight);
+          grad.addColorStop(0, color.bg.replace("0.2", "0.28"));
+          grad.addColorStop(1, "rgba(10, 15, 29, 0)");
+          bgGradient = grad;
+        } catch {
+          bgGradient = color.bg;
+        }
+      }
 
       return {
         label: emp,
         data: data,
         borderColor: color.border,
-        backgroundColor: color.bg,
+        backgroundColor: bgGradient,
         borderWidth: 2,
-        fill: false,
-        tension: 0.2,
-        pointRadius: (ctxRef) => ((ctxRef.raw || 0) > 0 ? 3 : 0),
+        fill: true,
+        tension: 0.35, // Modern smooth curves
+        pointRadius: (ctxRef) => ((ctxRef.raw || 0) > 0 ? 3.5 : 0),
         pointHoverRadius: 6,
         pointBackgroundColor: color.border,
+        pointBorderColor: "#fff",
+        pointBorderWidth: 1.5,
       };
     });
 
     if (minuteChart) {
-      // Smooth in-place update without canvas destroy/rebuild
       minuteChart.data.labels = allMinutes;
       minuteChart.data.datasets = datasets;
       minuteChart.update("none");
@@ -278,7 +344,8 @@ window.MessagingStats = (() => {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: false,
+        animation: false, // Zero animation overhead for snappy real-time polling
+        normalized: true, // Chart.js performance optimization for fast lookup
         interaction: {
           mode: "index",
           intersect: false
@@ -289,23 +356,27 @@ window.MessagingStats = (() => {
             labels: {
               color: "#cbd5e1",
               font: { family: "Inter", size: 12, weight: "500" },
-              boxWidth: 12,
+              boxWidth: 10,
+              boxHeight: 10,
               usePointStyle: true,
-              padding: 15
+              padding: 16
             }
           },
           tooltip: {
-            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            backgroundColor: "rgba(15, 23, 42, 0.96)",
             titleColor: "#f8fafc",
+            titleFont: { family: "Inter", size: 13, weight: "600" },
             bodyColor: "#cbd5e1",
-            borderColor: "rgba(255, 255, 255, 0.1)",
+            bodyFont: { family: "Inter", size: 12 },
+            borderColor: "rgba(255, 255, 255, 0.12)",
             borderWidth: 1,
             padding: 12,
             boxPadding: 6,
+            cornerRadius: 10,
             usePointStyle: true,
-            filter: (item) => Number(item.raw) > 0, // Only show agents who actually sent messages in that minute
+            filter: (item) => Number(item.raw) > 0, // Only show agents who were active in that minute
             callbacks: {
-              title: (items) => `Time: ${items[0]?.label || ""} (Beirut)`,
+              title: (items) => `⏱ ${items[0]?.label || ""} (Beirut)`,
               footer: (items) => {
                 const total = items.reduce((sum, item) => sum + (Number(item.parsed?.y) || 0), 0);
                 return `Total Sent: ${total} msgs`;
@@ -315,18 +386,24 @@ window.MessagingStats = (() => {
         },
         scales: {
           x: {
-            grid: { color: "rgba(255, 255, 255, 0.05)" },
+            grid: {
+              color: "rgba(255, 255, 255, 0.04)",
+              drawBorder: false
+            },
             ticks: {
               color: "#94a3b8",
               maxRotation: 0,
               autoSkip: true,
-              maxTicksLimit: 16,
+              maxTicksLimit: Math.max(12, Math.floor(allMinutes.length / 15)),
               font: { family: "Inter", size: 11 }
             }
           },
           y: {
             beginAtZero: true,
-            grid: { color: "rgba(255, 255, 255, 0.05)" },
+            grid: {
+              color: "rgba(255, 255, 255, 0.05)",
+              drawBorder: false
+            },
             ticks: {
               color: "#94a3b8",
               precision: 0,
@@ -336,12 +413,15 @@ window.MessagingStats = (() => {
               display: true,
               text: "Messages / Min",
               color: "#64748b",
-              font: { size: 11 }
+              font: { size: 11, weight: "500" }
             }
           }
         }
       }
     });
+
+    // Auto-scroll viewport to the latest minute on initial build
+    setTimeout(() => scrollMinuteChartToLatest(false), 50);
   }
 
   function renderHourlyChart(hourlyData) {
@@ -700,7 +780,76 @@ window.MessagingStats = (() => {
       datePicker.value = getBeirutTodayStr();
     }
 
+    // Modern Minute Graph Controls & Scroll Listeners
+    setupMinuteGraphControls();
+
     loadStats();
+  }
+
+  function setupMinuteGraphControls() {
+    const viewport = document.getElementById("minute-chart-viewport");
+    const zoomInBtn = document.getElementById("chart-zoom-in-btn");
+    const zoomOutBtn = document.getElementById("chart-zoom-out-btn");
+    const scrollNowBtn = document.getElementById("chart-scroll-now-btn");
+    const windowPills = document.querySelectorAll(".chart-window-pill");
+
+    // Window preset buttons (30m, 1h, 3h, All Day)
+    windowPills.forEach(pill => {
+      pill.addEventListener("click", () => {
+        windowPills.forEach(p => p.classList.remove("active"));
+        pill.classList.add("active");
+        currentWindow = pill.getAttribute("data-window") || "all";
+        renderMinuteByEmployeeChart();
+        setTimeout(() => scrollMinuteChartToLatest(true), 60);
+      });
+    });
+
+    // Zoom controls: adjusts pxPerMinute density smoothly
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener("click", () => {
+        pxPerMinute = Math.min(32, pxPerMinute + 4);
+        renderMinuteByEmployeeChart();
+      });
+    }
+
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener("click", () => {
+        pxPerMinute = Math.max(4, pxPerMinute - 4);
+        renderMinuteByEmployeeChart();
+      });
+    }
+
+    // Scroll to latest minute button
+    if (scrollNowBtn) {
+      scrollNowBtn.addEventListener("click", () => {
+        scrollMinuteChartToLatest(true);
+      });
+    }
+
+    // Click & Drag-to-scroll functionality for fast desktop pan
+    if (viewport) {
+      viewport.addEventListener("mousedown", (e) => {
+        isDraggingViewport = true;
+        viewport.style.cursor = "grabbing";
+        dragStartX = e.pageX - viewport.offsetLeft;
+        dragScrollLeft = viewport.scrollLeft;
+      });
+
+      window.addEventListener("mouseup", () => {
+        if (isDraggingViewport) {
+          isDraggingViewport = false;
+          if (viewport) viewport.style.cursor = "default";
+        }
+      });
+
+      viewport.addEventListener("mousemove", (e) => {
+        if (!isDraggingViewport) return;
+        e.preventDefault();
+        const x = e.pageX - viewport.offsetLeft;
+        const walk = (x - dragStartX) * 1.5; // Scroll speed factor
+        viewport.scrollLeft = dragScrollLeft - walk;
+      });
+    }
   }
 
   return {

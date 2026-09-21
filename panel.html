@@ -512,19 +512,49 @@
         </div>
 
         <!-- MAIN GRAPH: Employee Activity Minute-by-Minute -->
-        <div class="panel-container" style="padding: 28px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+        <div class="panel-container" style="padding: 26px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 14px;">
             <div>
-              <h2 class="section-title" style="margin-bottom: 4px;">
-                <i class="fa-solid fa-chart-line"></i> Messages by Employee (Minute-by-Minute)
-              </h2>
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                <h2 class="section-title" style="margin-bottom: 0;">
+                  <i class="fa-solid fa-chart-line"></i> Messages by Employee (Minute-by-Minute)
+                </h2>
+                <div id="msg-graph-live-badge" class="chart-live-ticker">
+                  <span class="ticker-dot"></span> Live Timeline
+                </div>
+              </div>
               <p style="color: var(--text-muted); font-size: 0.88rem;">
-                Real-time minute-by-minute messages sent per agent. Pinpoints bursts, speed, and output throughout the day.
+                Continuous timeline with per-agent activity bursts. Drag or scroll horizontally to inspect specific minutes.
               </p>
             </div>
+            <!-- Interactive Graph Controls -->
+            <div class="chart-header-actions">
+              <!-- Preset Windows -->
+              <div class="chart-window-pills">
+                <button class="chart-window-pill" data-window="30">30m</button>
+                <button class="chart-window-pill" data-window="60">1h</button>
+                <button class="chart-window-pill" data-window="180">3h</button>
+                <button class="chart-window-pill active" data-window="all">All Day</button>
+              </div>
+              <!-- Zoom In/Out & Scroll Buttons -->
+              <div style="display: flex; gap: 6px;">
+                <button id="chart-zoom-out-btn" class="chart-btn-icon" title="Zoom Out (Compact View)">
+                  <i class="fa-solid fa-magnifying-glass-minus"></i>
+                </button>
+                <button id="chart-zoom-in-btn" class="chart-btn-icon" title="Zoom In (High Detail View)">
+                  <i class="fa-solid fa-magnifying-glass-plus"></i>
+                </button>
+                <button id="chart-scroll-now-btn" class="chart-btn-icon" title="Scroll to Latest Minute" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+                  <i class="fa-solid fa-angles-right"></i> Latest
+                </button>
+              </div>
+            </div>
           </div>
-          <div style="position: relative; height: 380px; width: 100%;">
-            <canvas id="employee-minute-chart"></canvas>
+          <!-- Scrollable Viewport Wrapper -->
+          <div class="minute-chart-viewport" id="minute-chart-viewport">
+            <div class="minute-chart-canvas-wrapper" id="minute-chart-canvas-wrapper">
+              <canvas id="employee-minute-chart"></canvas>
+            </div>
           </div>
         </div>
 
