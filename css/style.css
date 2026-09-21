@@ -980,6 +980,8 @@ tr:hover td {
   scrollbar-width: thin;
   scrollbar-color: rgba(99, 102, 241, 0.3) rgba(15, 23, 42, 0.5);
   -webkit-overflow-scrolling: touch;
+  contain: paint;
+  will-change: scroll-position;
 }
 
 .minute-chart-viewport::-webkit-scrollbar {
@@ -1004,7 +1006,7 @@ tr:hover td {
   position: relative;
   height: 380px;
   min-width: 100%;
-  transition: width 0.15s ease-out;
+  transform: translateZ(0);
 }
 
 .chart-live-ticker {

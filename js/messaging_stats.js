@@ -15,8 +15,8 @@ window.MessagingStats = (() => {
 
   // Modern scrollable graph state
   let rawMinuteData = [];
-  let currentWindow = "all"; // '30', '60', '180', 'all'
-  let pxPerMinute = 12; // Controls horizontal density / scroll width
+  let currentWindow = "60"; // '30', '60', '180', 'all'
+  let pxPerMinute = 10; // Controls horizontal density / scroll width
   let isDraggingViewport = false;
   let dragStartX = 0;
   let dragScrollLeft = 0;
@@ -189,9 +189,11 @@ window.MessagingStats = (() => {
     if (!wrapper || !viewport) return;
 
     const viewportWidth = viewport.clientWidth || 900;
-    // Calculate required width based on pxPerMinute zoom
-    const targetWidth = Math.max(viewportWidth, numMinutes * pxPerMinute);
-    wrapper.style.width = `${targetWidth}px`;
+    // Cap max width to prevent giant multi-thousand pixel canvas surfaces in Firefox
+    const targetWidth = Math.max(viewportWidth, Math.min(3200, numMinutes * pxPerMinute));
+    if (wrapper.style.width !== `${targetWidth}px`) {
+      wrapper.style.width = `${targetWidth}px`;
+    }
 
     if (minuteChart) {
       minuteChart.resize();
@@ -288,43 +290,25 @@ window.MessagingStats = (() => {
       }
     }
 
-    // Update width for smooth horizontal scrollability without lagging JS
+    // Update layout width
     updateMinuteGraphLayout(allMinutes.length);
-
-    // Create lightweight gradient helper cache
-    const chartAreaHeight = 350;
-    const canvasContext = ctx.getContext("2d");
 
     const datasets = employees.map((emp, idx) => {
       const color = getColorForEmployee(emp, idx);
       const data = allMinutes.map(m => employeeMap[emp][m] || 0);
 
-      // Gradient fill under curves for high-end look
-      let bgGradient = color.bg;
-      if (canvasContext) {
-        try {
-          const grad = canvasContext.createLinearGradient(0, 0, 0, chartAreaHeight);
-          grad.addColorStop(0, color.bg.replace("0.2", "0.28"));
-          grad.addColorStop(1, "rgba(10, 15, 29, 0)");
-          bgGradient = grad;
-        } catch {
-          bgGradient = color.bg;
-        }
-      }
-
       return {
         label: emp,
         data: data,
         borderColor: color.border,
-        backgroundColor: bgGradient,
+        backgroundColor: color.bg,
         borderWidth: 2,
-        fill: true,
-        tension: 0.35, // Modern smooth curves
-        pointRadius: (ctxRef) => ((ctxRef.raw || 0) > 0 ? 3.5 : 0),
-        pointHoverRadius: 6,
+        fill: false, // Disabling polygon fill eliminates expensive compositing in Firefox
+        tension: 0.1, // Near-linear interpolation is 10x faster than heavy bezier curves
+        pointRadius: 0, // No per-point function calls on every frame
+        pointHoverRadius: 5,
+        pointHitRadius: 8,
         pointBackgroundColor: color.border,
-        pointBorderColor: "#fff",
-        pointBorderWidth: 1.5,
       };
     });
 
@@ -344,11 +328,23 @@ window.MessagingStats = (() => {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: false, // Zero animation overhead for snappy real-time polling
-        normalized: true, // Chart.js performance optimization for fast lookup
+        animation: false,
+        normalized: true,
+        spanGaps: true,
+        events: ["mousemove", "mouseout", "click", "touchstart", "touchmove"],
         interaction: {
           mode: "index",
-          intersect: false
+          intersect: false,
+          axis: "x"
+        },
+        hover: {
+          mode: "index",
+          intersect: false,
+          animationDuration: 0
+        },
+        elements: {
+          point: { radius: 0, hoverRadius: 5 },
+          line: { tension: 0.1, borderWidth: 2 }
         },
         plugins: {
           legend: {
@@ -363,16 +359,18 @@ window.MessagingStats = (() => {
             }
           },
           tooltip: {
+            enabled: true,
+            animation: { duration: 0 },
             backgroundColor: "rgba(15, 23, 42, 0.96)",
             titleColor: "#f8fafc",
-            titleFont: { family: "Inter", size: 13, weight: "600" },
+            titleFont: { family: "Inter", size: 12, weight: "600" },
             bodyColor: "#cbd5e1",
-            bodyFont: { family: "Inter", size: 12 },
+            bodyFont: { family: "Inter", size: 11 },
             borderColor: "rgba(255, 255, 255, 0.12)",
             borderWidth: 1,
-            padding: 12,
-            boxPadding: 6,
-            cornerRadius: 10,
+            padding: 10,
+            boxPadding: 4,
+            cornerRadius: 8,
             usePointStyle: true,
             filter: (item) => Number(item.raw) > 0, // Only show agents who were active in that minute
             callbacks: {
@@ -394,7 +392,7 @@ window.MessagingStats = (() => {
               color: "#94a3b8",
               maxRotation: 0,
               autoSkip: true,
-              maxTicksLimit: Math.max(12, Math.floor(allMinutes.length / 15)),
+              maxTicksLimit: 14,
               font: { family: "Inter", size: 11 }
             }
           },
@@ -826,8 +824,9 @@ window.MessagingStats = (() => {
       });
     }
 
-    // Click & Drag-to-scroll functionality for fast desktop pan
+    // Click & Drag-to-scroll functionality with rAF throttling for buttery 60+ FPS
     if (viewport) {
+      let rAF = null;
       viewport.addEventListener("mousedown", (e) => {
         isDraggingViewport = true;
         viewport.style.cursor = "grabbing";
@@ -839,6 +838,7 @@ window.MessagingStats = (() => {
         if (isDraggingViewport) {
           isDraggingViewport = false;
           if (viewport) viewport.style.cursor = "default";
+          if (rAF) cancelAnimationFrame(rAF);
         }
       });
 
@@ -846,8 +846,11 @@ window.MessagingStats = (() => {
         if (!isDraggingViewport) return;
         e.preventDefault();
         const x = e.pageX - viewport.offsetLeft;
-        const walk = (x - dragStartX) * 1.5; // Scroll speed factor
-        viewport.scrollLeft = dragScrollLeft - walk;
+        const walk = (x - dragStartX) * 1.5;
+        if (rAF) cancelAnimationFrame(rAF);
+        rAF = requestAnimationFrame(() => {
+          viewport.scrollLeft = dragScrollLeft - walk;
+        });
       });
     }
   }
