@@ -75,7 +75,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     messagingStatsLink.addEventListener("click", (e) => {
       e.preventDefault();
       showPage("messaging-stats-page");
-      if (window.MessagingStats) window.MessagingStats.init();
+      if (window.MessagingStats) {
+        window.MessagingStats.init();
+        requestAnimationFrame(() => {
+          window.MessagingStats.resizeCharts();
+        });
+      }
     });
   }
 

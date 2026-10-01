@@ -306,6 +306,7 @@ window.MessagingStats = (() => {
     let endMinStr = lastActiveMin;
     if (isToday) {
       const nowMin = getBeirutNowMinute();
+      // Ensure the timeline extends up to the latest known message or current time
       if (nowMin > endMinStr) {
         endMinStr = nowMin;
       }
@@ -333,7 +334,7 @@ window.MessagingStats = (() => {
     }
 
     // Convert minutes into epoch timestamps (seconds) for uPlot x-axis
-    // Use target date or today's date base
+    // Base date in ISO format
     const baseDateStr = currentDate || todayBeirut;
     const timestamps = allMinutes.map(m => {
       const [h, min] = m.split(":").map(Number);
@@ -386,8 +387,10 @@ window.MessagingStats = (() => {
       document.body.appendChild(tooltipEl);
     }
 
+    const containerW = container.clientWidth || 900;
+
     const opts = {
-      width: container.clientWidth || 900,
+      width: containerW,
       height: 380,
       cursor: {
         drag: { x: true, y: false },
@@ -589,6 +592,7 @@ window.MessagingStats = (() => {
       return;
     }
 
+    const totalSent = employees.reduce((sum, e) => sum + Number(e.sent_count), 0);
     const labels = employees.map(e => e.employee);
     const data = employees.map(e => e.sent_count);
     const colors = employees.map((e, idx) => getColorForEmployee(e.employee, idx).border);
@@ -626,6 +630,20 @@ window.MessagingStats = (() => {
               boxWidth: 12,
               padding: 10
             }
+          },
+          tooltip: {
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
+            titleColor: "#f8fafc",
+            bodyColor: "#cbd5e1",
+            borderColor: "rgba(255, 255, 255, 0.1)",
+            borderWidth: 1,
+            callbacks: {
+              label: (context) => {
+                const val = context.raw || 0;
+                const pct = totalSent > 0 ? ((val / totalSent) * 100).toFixed(1) : 0;
+                return ` ${context.label}: ${val.toLocaleString()} msgs (${pct}%)`;
+              }
+            }
           }
         },
         cutout: "68%"
@@ -649,12 +667,13 @@ window.MessagingStats = (() => {
       const count = Number(emp.sent_count);
       const pct = totalSent > 0 ? ((count / totalSent) * 100).toFixed(1) : "0.0";
       const color = getColorForEmployee(emp.employee, idx);
+      const isSystem = emp.employee === "System" || emp.employee === "System / Webhook";
 
       html += `
         <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
           <td style="padding: 12px 14px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
             <span style="width: 10px; height: 10px; border-radius: 50%; background: ${color.border}; display: inline-block;"></span>
-            ${emp.employee}
+            <span>${emp.employee}</span>
           </td>
           <td style="padding: 12px 14px; font-weight: 600; color: #f8fafc;">${count.toLocaleString()}</td>
           <td style="padding: 12px 14px;">
@@ -666,9 +685,15 @@ window.MessagingStats = (() => {
             </div>
           </td>
           <td style="padding: 12px 14px;">
-            <span class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem;">
-              <i class="fa-solid fa-check"></i> Active
-            </span>
+            ${isSystem ? `
+              <span class="badge" style="background: rgba(148,163,184,0.15); color: #94a3b8; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem;">
+                <i class="fa-solid fa-robot"></i> Automated
+              </span>
+            ` : `
+              <span class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem;">
+                <i class="fa-solid fa-check"></i> Active
+              </span>
+            `}
           </td>
         </tr>
       `;
@@ -938,16 +963,26 @@ window.MessagingStats = (() => {
       });
     }
 
-    // Auto-resize uPlot on window resize
+    // Auto-resize uPlot & Chart.js on window resize
     window.addEventListener("resize", () => {
-      const container = document.getElementById("uplot-chart-container");
-      if (container && uplotChart) {
-        uplotChart.setSize({
-          width: container.clientWidth || 900,
-          height: 380
-        });
-      }
+      resizeCharts();
     });
+  }
+
+  function resizeCharts() {
+    const container = document.getElementById("uplot-chart-container");
+    if (container && uplotChart && container.clientWidth > 0) {
+      uplotChart.setSize({
+        width: container.clientWidth,
+        height: 380
+      });
+    }
+    if (hourlyChart) {
+      hourlyChart.resize();
+    }
+    if (donutChart) {
+      donutChart.resize();
+    }
   }
 
   return {
@@ -955,6 +990,7 @@ window.MessagingStats = (() => {
     loadStats,
     syncBSBNow,
     startLivePolling,
-    stopLivePolling
+    stopLivePolling,
+    resizeCharts
   };
 })();

@@ -430,9 +430,20 @@ window.Subscriptions = (() => {
         </div>
       `;
 
-      // Remove the row from the table instantly
+      // Remove the row(s) for this account from the table instantly
+      if (j.accemail) {
+        const cleanAccEmail = j.accemail.trim().toLowerCase();
+        const matchingRows = subscriptionTable.querySelectorAll(`tr[data-accemail="${cleanAccEmail}"]`);
+        matchingRows.forEach(tr => tr.remove());
+      }
       const rowToRemove = subscriptionTable.querySelector(`[data-id="${pay_id}"]`);
       if (rowToRemove) rowToRemove.closest("tr")?.remove();
+
+      // If no rows left, show empty message
+      const remainingRows = subscriptionTable.querySelectorAll("tr");
+      if (!remainingRows || remainingRows.length === 0) {
+        subscriptionTable.innerHTML = `<tr><td colspan="8" style="text-align:center;">No unpaid GPT renewals.</td></tr>`;
+      }
 
       // Refresh KPIs in background
       fetchDashboardKpis();
@@ -1586,8 +1597,9 @@ user: ${it.user}`;
         } else {
           rows.forEach(row => {
             const ts = row.timestamp ? formatCompactDate(row.timestamp) : "";
+            const emailAttr = (row.accemail || "").trim().toLowerCase();
             subscriptionTable.insertAdjacentHTML("beforeend", `
-              <tr>
+              <tr data-accemail="${emailAttr}">
                 <td data-label="ID">${row.id ?? ""}</td>
                 <td data-label="Timestamp">${ts}</td>
                 <td data-label="Phone"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.phone || ''}'); showMessage('Copied phone number!', 'success')">${row.phone ?? ""}</span></td>
