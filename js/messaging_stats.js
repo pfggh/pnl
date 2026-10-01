@@ -651,7 +651,7 @@ window.MessagingStats = (() => {
     });
   }
 
-  function renderEmployeeTable(employees) {
+  function renderEmployeeTable(employees, minuteData) {
     const tbody = document.getElementById("employee-breakdown-tbody");
     if (!tbody) return;
 
@@ -659,6 +659,23 @@ window.MessagingStats = (() => {
       tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color: var(--text-muted); padding: 20px;">No outgoing message activity for this date.</td></tr>`;
       return;
     }
+
+    // Find the latest active minute per employee from minuteData
+    const lastActiveMap = {};
+    if (minuteData && Array.isArray(minuteData)) {
+      minuteData.forEach(item => {
+        if (item.employee && item.minute && item.count > 0) {
+          if (!lastActiveMap[item.employee] || item.minute > lastActiveMap[item.employee]) {
+            lastActiveMap[item.employee] = item.minute;
+          }
+        }
+      });
+    }
+
+    const nowMin = getBeirutNowMinute();
+    const isToday = !currentDate || currentDate === getBeirutTodayStr();
+    const [nowH, nowM] = nowMin.split(":").map(Number);
+    const nowTotalMin = nowH * 60 + nowM;
 
     const totalSent = employees.reduce((sum, e) => sum + Number(e.sent_count), 0);
 
@@ -668,6 +685,42 @@ window.MessagingStats = (() => {
       const pct = totalSent > 0 ? ((count / totalSent) * 100).toFixed(1) : "0.0";
       const color = getColorForEmployee(emp.employee, idx);
       const isSystem = emp.employee === "System" || emp.employee === "System / Webhook";
+
+      // Determine active / offline status
+      let statusHtml = "";
+      if (isSystem) {
+        statusHtml = `
+          <span class="badge" style="background: rgba(148,163,184,0.15); color: #94a3b8; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem;">
+            <i class="fa-solid fa-robot"></i> Automated
+          </span>
+        `;
+      } else if (isToday && lastActiveMap[emp.employee]) {
+        const lastMin = lastActiveMap[emp.employee];
+        const [lastH, lastM] = lastMin.split(":").map(Number);
+        const lastTotalMin = lastH * 60 + lastM;
+        const diffMin = nowTotalMin - lastTotalMin;
+
+        if (diffMin <= 15) {
+          // Sent message in the last 15 minutes
+          statusHtml = `
+            <span class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem;">
+              <i class="fa-solid fa-circle" style="font-size: 0.5rem; vertical-align: middle;"></i> Active Now
+            </span>
+          `;
+        } else {
+          statusHtml = `
+            <span class="badge" style="background: rgba(255,255,255,0.06); color: var(--text-muted); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem;">
+              Last active ${lastMin}
+            </span>
+          `;
+        }
+      } else {
+        statusHtml = `
+          <span class="badge" style="background: rgba(255,255,255,0.06); color: var(--text-muted); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem;">
+            ${count > 0 ? "Completed" : "Inactive"}
+          </span>
+        `;
+      }
 
       html += `
         <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
@@ -685,15 +738,7 @@ window.MessagingStats = (() => {
             </div>
           </td>
           <td style="padding: 12px 14px;">
-            ${isSystem ? `
-              <span class="badge" style="background: rgba(148,163,184,0.15); color: #94a3b8; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem;">
-                <i class="fa-solid fa-robot"></i> Automated
-              </span>
-            ` : `
-              <span class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem;">
-                <i class="fa-solid fa-check"></i> Active
-              </span>
-            `}
+            ${statusHtml}
           </td>
         </tr>
       `;
@@ -783,7 +828,7 @@ window.MessagingStats = (() => {
       renderMinuteByEmployeeChart(data.minute_by_employee || []);
       renderHourlyChart(data.hourly || []);
       renderDonutChart(data.employees || []);
-      renderEmployeeTable(data.employees || []);
+      renderEmployeeTable(data.employees || [], data.minute_by_employee || []);
       renderTopAds(data.top_ads || []);
 
       const datePicker = document.getElementById("msg-date-picker");
