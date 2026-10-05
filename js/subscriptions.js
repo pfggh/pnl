@@ -2526,7 +2526,9 @@ password: ${newPass}
         const data = await resp.json();
         if (!resp.ok || data.error) throw new Error(data.error || "Error");
 
-        if (successPrefix) {
+        if (data.message) {
+          showMessage(data.message, "success");
+        } else if (successPrefix) {
           const inserted = data.inserted ?? 0;
           const skipped = data.skipped_existing ?? 0;
           showCountBadge(`${successPrefix}: ${inserted} processed`, "fa-solid fa-bolt-lightning");
@@ -2585,10 +2587,70 @@ password: ${newPass}
     if (msgBtn) {
       msgBtn.onclick = () => openConfirmHoldModal({
         title: "Trigger Message",
-        body: "This will send messages to customers.",
+        body: "This will send messages to customers (capped at 200 total, equal share across campaigns).",
         seconds: 3,
-        onConfirm: () => doGenericTrigger("trigger-msg", null, "/functions/v1/auto_msg")
+        onConfirm: () => doGenericTrigger("trigger-msg", null, "/functions/v1/auto_msg", "Trigger Message", "Campaigns")
       });
+    }
+
+    // Bind Ingest Backup file button
+    const uploadBackupBtn = document.getElementById("upload-backup-btn");
+    const backupFileInput = document.getElementById("backup-file-input");
+    if (uploadBackupBtn && backupFileInput) {
+      uploadBackupBtn.onclick = () => {
+        backupFileInput.value = "";
+        backupFileInput.click();
+      };
+
+      backupFileInput.onchange = async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        openConfirmHoldModal({
+          title: "Ingest BSB Backup",
+          body: `Upload and ingest "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) into bsb_messages? Messages will be safely deduplicated by chat_id.`,
+          seconds: 2,
+          onConfirm: async () => {
+            const oldText = uploadBackupBtn.innerHTML;
+            try {
+              uploadBackupBtn.disabled = true;
+              uploadBackupBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Ingesting...`;
+              showSpinner(true);
+              showMessage(`Ingesting ${file.name}... Please wait.`, "info");
+
+              const session = await window.supabaseClient.auth.getSession();
+              const token = session.data?.session?.access_token || window.SUPABASE_ANON_KEY;
+
+              const formData = new FormData();
+              formData.append("file", file);
+
+              const resp = await fetch(`${window.SUPABASE_URL}/functions/v1/ingest_backup`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`
+                },
+                body: formData
+              });
+
+              const data = await resp.json();
+              if (!resp.ok || data.error) {
+                throw new Error(data.error || "Failed to ingest backup file");
+              }
+
+              showMessage(data.message || `Ingestion complete! ${data.inserted || 0} inserted, ${data.updated || 0} updated.`, "success");
+              showCountBadge(`${data.inserted || 0} new msgs`, "fa-solid fa-file-circle-check");
+            } catch (err) {
+              console.error("[ingest_backup error]", err);
+              showMessage(`Error: ${err.message}`, "error");
+            } finally {
+              showSpinner(false);
+              uploadBackupBtn.disabled = false;
+              uploadBackupBtn.innerHTML = oldText;
+              backupFileInput.value = "";
+            }
+          }
+        });
+      };
     }
 
     // Bind Cancel Private button
