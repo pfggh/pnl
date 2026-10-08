@@ -1797,18 +1797,6 @@ user: ${it.user}`;
       usernameInput.value = "";
     }
     updateDurationOptions();
-
-    // Gemini links are a fixed 18-month product: lock the duration field
-    const durationInput = document.getElementById("duration");
-    if (durationInput) {
-      if (svc === "gemini") {
-        durationInput.value = "18";
-        durationInput.readOnly = true;
-      } else if (durationInput.readOnly) {
-        durationInput.value = "";
-        durationInput.readOnly = false;
-      }
-    }
   });
   // form.reset() changes the service select without firing "change"; resync dependent fields after it
   adminForm.addEventListener("reset", () =>
@@ -2063,6 +2051,12 @@ password: ${newPass}
 
       if (svc === "anghami" && !username) {
         showMessage("Username is required for Anghami.", "error");
+        showSpinner(false);
+        submitBtn.disabled = false;
+        return;
+      }
+      if (svc === "gemini" && ![3, 6, 12].includes(duration)) {
+        showMessage("Gemini duration must be 3, 6 or 12 months.", "error");
         showSpinner(false);
         submitBtn.disabled = false;
         return;
