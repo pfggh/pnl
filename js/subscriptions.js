@@ -1797,7 +1797,23 @@ user: ${it.user}`;
       usernameInput.value = "";
     }
     updateDurationOptions();
+
+    // Gemini links are a fixed 18-month product: lock the duration field
+    const durationInput = document.getElementById("duration");
+    if (durationInput) {
+      if (svc === "gemini") {
+        durationInput.value = "18";
+        durationInput.readOnly = true;
+      } else if (durationInput.readOnly) {
+        durationInput.value = "";
+        durationInput.readOnly = false;
+      }
+    }
   });
+  // form.reset() changes the service select without firing "change"; resync dependent fields after it
+  adminForm.addEventListener("reset", () =>
+    setTimeout(() => serviceSelector.dispatchEvent(new Event("change")))
+  );
 
   document.addEventListener("DOMContentLoaded", () => {
     serviceSelector.dispatchEvent(new Event("change"));
@@ -2071,6 +2087,8 @@ password: ${newPass}
         body.sub_email = subEmail; // required for Canva
       } else if (svc === "spotify") {
         endpoint = "/functions/v1/addspotify";
+      } else if (svc === "gemini") {
+        endpoint = "/functions/v1/addgemini";
       } else if (svc === "gpt private") {
         endpoint = "/functions/v1/addprivate";
         body.email = subEmail;
@@ -2108,6 +2126,19 @@ password: ${newPass}
             submitBtn.disabled = false;
             return;
           }
+        }
+
+        // Gemini: link was bought but saving failed — still surface it so it isn't lost
+        if (svc === "gemini" && data.error && data.link) {
+          showMessage(`Error: ${data.error}`, "error");
+          const btn = document.createElement("button");
+          btn.textContent = "Copy Purchased Link";
+          btn.onclick = async () => {
+            await navigator.clipboard.writeText(data.link);
+            showMessage("Copied!", "success");
+          };
+          messageBox.appendChild(btn);
+          return;
         }
 
         if (!resp.ok || data.error) throw new Error(data.error || "Unknown error occurred");
@@ -2204,6 +2235,21 @@ password: ${newPass}
           const subEmailInput = document.getElementById("sub-email");
           if (subEmailInput) subEmailInput.value = "";
 
+        } else if (svc === "gemini") {
+          showMessage("", "success");
+          fetchDashboardKpis();
+          const expiryString = new Date(data.expiry).toLocaleDateString('en-GB', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+          });
+          const btn = document.createElement("button");
+          btn.textContent = "Copy Gemini Info";
+          btn.onclick = async () => {
+            await navigator.clipboard.writeText(
+              `*link*: ${data.link}\n*expiry*: ${expiryString}`
+            );
+            showMessage("Copied!", "success");
+          };
+          messageBox.appendChild(btn);
         } else if (svc === "gpt private") {
           showMessage("Private Invite Sent!", "success");
           fetchDashboardKpis();
