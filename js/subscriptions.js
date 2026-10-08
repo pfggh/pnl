@@ -1797,6 +1797,18 @@ user: ${it.user}`;
       usernameInput.value = "";
     }
     updateDurationOptions();
+
+    // CapCut is a fixed 1-month product: lock the duration field
+    const durationInput = document.getElementById("duration");
+    if (durationInput) {
+      if (svc === "capcut") {
+        durationInput.value = "1";
+        durationInput.readOnly = true;
+      } else if (durationInput.readOnly) {
+        durationInput.value = "";
+        durationInput.readOnly = false;
+      }
+    }
   });
   // form.reset() changes the service select without firing "change"; resync dependent fields after it
   adminForm.addEventListener("reset", () =>
@@ -2083,6 +2095,10 @@ password: ${newPass}
         endpoint = "/functions/v1/addspotify";
       } else if (svc === "gemini") {
         endpoint = "/functions/v1/addgemini";
+      } else if (svc === "capcut") {
+        endpoint = "/functions/v1/addcapcut";
+        // Same id on any resubmit of this attempt, so the server never buys twice for one click
+        body.request_id = crypto.randomUUID();
       } else if (svc === "gpt private") {
         endpoint = "/functions/v1/addprivate";
         body.email = subEmail;
@@ -2120,6 +2136,19 @@ password: ${newPass}
             submitBtn.disabled = false;
             return;
           }
+        }
+
+        // CapCut: account was bought but saving failed — still surface it so it isn't lost
+        if (svc === "capcut" && data.error && data.credentials) {
+          showMessage(`Error: ${data.error}`, "error");
+          const btn = document.createElement("button");
+          btn.textContent = "Copy Purchased Account";
+          btn.onclick = async () => {
+            await navigator.clipboard.writeText(data.credentials);
+            showMessage("Copied!", "success");
+          };
+          messageBox.appendChild(btn);
+          return;
         }
 
         // Gemini: link was bought but saving failed — still surface it so it isn't lost
@@ -2241,6 +2270,22 @@ password: ${newPass}
             await navigator.clipboard.writeText(
               `*link*: ${data.link}\n*expiry*: ${expiryString}`
             );
+            showMessage("Copied!", "success");
+          };
+          messageBox.appendChild(btn);
+        } else if (svc === "capcut") {
+          showMessage(data.warning ? `Warning: ${data.warning}` : "", data.warning ? "error" : "success");
+          fetchDashboardKpis();
+          const expiryString = new Date(data.expiry).toLocaleDateString('en-GB', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+          });
+          const accountText = data.email && data.password
+            ? `*e-mail*: ${data.email}\n*password*: ${data.password}`
+            : `*account*: ${data.credentials}`;
+          const btn = document.createElement("button");
+          btn.textContent = "Copy CapCut Info";
+          btn.onclick = async () => {
+            await navigator.clipboard.writeText(`${accountText}\n*expiry*: ${expiryString}`);
             showMessage("Copied!", "success");
           };
           messageBox.appendChild(btn);
