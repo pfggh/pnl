@@ -2095,6 +2095,8 @@ password: ${newPass}
         endpoint = "/functions/v1/addspotify";
       } else if (svc === "gemini") {
         endpoint = "/functions/v1/addgemini";
+        // Same id on any resubmit of this attempt, so the server never buys twice for one click
+        body.request_id = crypto.randomUUID();
       } else if (svc === "capcut") {
         endpoint = "/functions/v1/addcapcut";
         // Same id on any resubmit of this attempt, so the server never buys twice for one click
@@ -2259,7 +2261,7 @@ password: ${newPass}
           if (subEmailInput) subEmailInput.value = "";
 
         } else if (svc === "gemini") {
-          showMessage("", "success");
+          showMessage(data.warning ? `Warning: ${data.warning}` : "", data.warning ? "error" : "success");
           fetchDashboardKpis();
           const expiryString = new Date(data.expiry).toLocaleDateString('en-GB', {
             weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
