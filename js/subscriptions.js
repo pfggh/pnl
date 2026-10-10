@@ -1486,15 +1486,19 @@ user: ${it.user}`;
             <th>Actions</th>
           </tr>`;
         const rows = data.filteredAnghami || [];
-        showCountBadge(`Filtered Anghami: ${rows.length} rows`, "fa-solid fa-music");
+        const nowMs = Date.now();
+        const isActive = (r) => r.expiry && new Date(r.expiry).getTime() > nowMs;
+        const activeCount = rows.filter(isActive).length;
+        showCountBadge(`Filtered Anghami: ${rows.length} rows (${activeCount} active, ${rows.length - activeCount} expired)`, "fa-solid fa-music");
         subscriptionTable.innerHTML = "";
         if (!rows.length) {
           subscriptionTable.innerHTML = `<tr><td colspan="7" style="text-align:center;">No matching Anghami subscriptions found.</td></tr>`;
         } else {
           rows.forEach(row => {
             const exp = row.expiry ? formatCompactDate(row.expiry) : "";
+            const rowClass = isActive(row) ? "ang-row-active" : "ang-row-expired";
             subscriptionTable.insertAdjacentHTML("beforeend", `
-              <tr>
+              <tr class="${rowClass}">
                 <td data-label="Sub ID">${row.sub_id ?? ""}</td>
                 <td data-label="Phone"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.phone || ''}'); showMessage('Copied phone number!', 'success')">${row.phone ?? ""}</span></td>
                 <td data-label="Username"><span id="username-val-${row.sub_id}">${row.username ?? ""}</span></td>
