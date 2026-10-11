@@ -37,23 +37,17 @@ window.Teams = (() => {
     }
   };
 
-  const KENDEV_TOKEN = "mcg__xCCjEvfwLnhYFNZ5ptTOxM6Gxwygw98pZCAFCEFM6xkH5_mGXxg-uQOk_Q6Z86U";
-
+  // The Kendev token lives server-side: the kendev_team edge function makes the call
   const fetchKendevDetails = async (id) => {
     try {
-      const targetUrl = `https://kendev.id.vn/api/v2/teams/${id}`;
-      // Using corsproxy.io to bypass browser CORS restrictions
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-      
-      const response = await fetch(proxyUrl, {
+      const response = await fetch(`${window.SUPABASE_URL}/functions/v1/kendev_team?id=${encodeURIComponent(id)}`, {
         method: "GET",
         headers: {
-          "Authorization": `Bearer ${KENDEV_TOKEN}`,
+          "Authorization": `Bearer ${window.authToken}`,
           "Content-Type": "application/json"
         }
       });
       const json = await response.json();
-      // Since it's a proxy, we check the body status
       if (!response.ok || (json && json.ok === false)) throw new Error(json?.error || "Kendev error");
       return json.data;
     } catch (err) {
