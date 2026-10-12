@@ -1,0 +1,15 @@
+# Environment & secrets
+.env*
+
+# Logs
+*.log
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Scratch and temporary files
+scratch*
+*.tmp
+*.swp
+*~
