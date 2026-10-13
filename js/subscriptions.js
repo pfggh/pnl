@@ -458,6 +458,39 @@ window.Subscriptions = (() => {
     }
   }
 
+  // Flag the account so it never appears in the Unpaid GPT Renewals table again
+  async function hideGptAcc(pay_id) {
+    try {
+      showSpinner(true);
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      const jwt = session?.access_token;
+
+      const res = await fetch(FN_CANCEL_GPT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${jwt}` },
+        body: JSON.stringify({ action: "hide", pay_id })
+      });
+      const j = await res.json();
+      if (!res.ok || j.error) throw new Error(j.error || "Failed to hide account.");
+
+      if (j.accemail) {
+        const cleanAccEmail = j.accemail.trim().toLowerCase();
+        subscriptionTable.querySelectorAll(`tr[data-accemail="${cleanAccEmail}"]`).forEach(tr => tr.remove());
+      }
+      subscriptionTable.querySelector(`[data-id="${pay_id}"]`)?.closest("tr")?.remove();
+
+      if (subscriptionTable.querySelectorAll("tr").length === 0) {
+        subscriptionTable.innerHTML = `<tr><td colspan="8" style="text-align:center;">No unpaid GPT renewals.</td></tr>`;
+      }
+      showMessage(`Hidden ${j.accemail || "account"} from GPT cancels.`, "success");
+    } catch (err) {
+      console.error(err);
+      showMessage(`Error: ${err.message}`, "error");
+    } finally {
+      showSpinner(false);
+    }
+  }
+
   // --- Anghami Cancel Modal Helpers ---
   const FN_CANCEL_ANGHAMI = `${window.SUPABASE_URL}/functions/v1/cancelanghami`;
   let currentAnghamiPayId = null;
@@ -1611,7 +1644,7 @@ user: ${it.user}`;
                 <td data-label="Email"><span class="truncate-text" title="Click to copy" onclick="navigator.clipboard.writeText('${row.accemail || ''}'); showMessage('Copied email!', 'success')">${row.accemail ?? ""}</span></td>
                 <td data-label="Expireds">${row.expireds ?? 0}</td>
                 <td data-label="Paid">${row.paid ?? ""}</td>
-                <td data-label="Actions"><button class="btn-table-action btn-delete gpt-cancel-btn" data-id="${row.id}"><i class="fa-solid fa-xmark"></i> Cancel</button></td>
+                <td data-label="Actions"><button class="btn-table-action btn-delete gpt-cancel-btn" data-id="${row.id}"><i class="fa-solid fa-xmark"></i> Cancel</button> <button class="btn-table-action gpt-hide-btn" data-id="${row.id}" data-email="${emailAttr}"><i class="fa-solid fa-eye-slash"></i> Hide Acc</button></td>
               </tr>
             `);
           });
@@ -2773,6 +2806,14 @@ password: ${newPass}
         const payId = Number(targetBtn.dataset.id);
         if (!payId) return showMessage("Missing pay id", "error");
         openGptCancelModal(payId);
+      } else if (targetBtn.classList.contains("gpt-hide-btn")) {
+        const payId = Number(targetBtn.dataset.id);
+        if (!payId) return showMessage("Missing pay id", "error");
+        buildConfirmModal(
+          "Hide account",
+          `Hide <strong>${targetBtn.dataset.email || "this account"}</strong> from GPT cancels? It will never appear in this table again. Nothing is cancelled or deleted.`,
+          () => hideGptAcc(payId)
+        );
       } else if (targetBtn.classList.contains("update-private-btn")) {
         const index = Number(targetBtn.dataset.index);
         const row = window.expiredPrivateSubsData && window.expiredPrivateSubsData[index];
