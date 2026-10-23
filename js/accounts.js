@@ -25,9 +25,9 @@ window.Accounts = (() => {
   const cancelModal = document.getElementById("cancel-modal");
   const modalContent = document.getElementById("modal-content");
 
-  // Interval for 2FA timer updates in accounts view
+  // Timer interval for continuous clock sync
   let accountsTotpInterval = null;
-  let activeTotpGenerators = [];
+  let activeTotpItems = []; // Array of { id, secret }
 
   const filterAccountsTable = () => {
     if (!accTableSearch) return;
@@ -48,7 +48,6 @@ window.Accounts = (() => {
     accTableSearch.addEventListener("input", filterAccountsTable);
   }
 
-  // Helper functions for UI feedback
   const showSpinnerAccs = (show = true) => {
     if (spinnerAccs) spinnerAccs.style.display = show ? "block" : "none";
   };
@@ -92,158 +91,173 @@ window.Accounts = (() => {
     }
   };
 
-  // Base32 decoding and TOTP code generation (RFC 6238 / RFC 4226)
-  function base32ToBytes(base32) {
+  // =========================================================================
+  // HIGH-PERFORMANCE SYNCHRONOUS RFC 6238 TOTP ENGINE
+  // Computes codes synchronously in sub-millisecond time with zero async latency
+  // =========================================================================
+
+  function sha1(bytes) {
+    let h0 = 0x67452301, h1 = 0xefcdab89, h2 = 0x98badcfe, h3 = 0x10325476, h4 = 0xc3d2e1f0;
+    const len = bytes.length;
+    const bitLen = len * 8;
+    const padLen = (((len + 8) >> 6) + 1) << 6;
+    const pad = new Uint8Array(padLen);
+    pad.set(bytes);
+    pad[len] = 0x80;
+    const view = new DataView(pad.buffer);
+    view.setUint32(padLen - 4, bitLen, false);
+
+    const w = new Int32Array(80);
+    for (let i = 0; i < padLen; i += 64) {
+      for (let j = 0; j < 16; j++) w[j] = view.getInt32(i + (j << 2), false);
+      for (let j = 16; j < 80; j++) {
+        const t = w[j - 3] ^ w[j - 8] ^ w[j - 14] ^ w[j - 16];
+        w[j] = (t << 1) | (t >>> 31);
+      }
+      let a = h0, b = h1, c = h2, d = h3, e = h4;
+      for (let j = 0; j < 80; j++) {
+        let f, k;
+        if (j < 20) { f = (b & c) | ((~b) & d); k = 0x5a827999; }
+        else if (j < 40) { f = b ^ c ^ d; k = 0x6ed9eba1; }
+        else if (j < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8f1bbcdc; }
+        else { f = b ^ c ^ d; k = 0xca62c1d6; }
+        const temp = (((a << 5) | (a >>> 27)) + f + e + k + w[j]) | 0;
+        e = d; d = c; c = (b << 30) | (b >>> 2); b = a; a = temp;
+      }
+      h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0; h4 = (h4 + e) | 0;
+    }
+    const out = new Uint8Array(20);
+    const outView = new DataView(out.buffer);
+    outView.setInt32(0, h0, false); outView.setInt32(4, h1, false);
+    outView.setInt32(8, h2, false); outView.setInt32(12, h3, false); outView.setInt32(16, h4, false);
+    return out;
+  }
+
+  function hmacSha1(key, message) {
+    let k = key;
+    if (k.length > 64) k = sha1(k);
+    const kPad = new Uint8Array(64);
+    kPad.set(k);
+    const oPad = new Uint8Array(64);
+    const iPad = new Uint8Array(64);
+    for (let i = 0; i < 64; i++) {
+      oPad[i] = kPad[i] ^ 0x5c;
+      iPad[i] = kPad[i] ^ 0x36;
+    }
+    const inner = new Uint8Array(64 + message.length);
+    inner.set(iPad); inner.set(message, 64);
+    const innerHash = sha1(inner);
+    const outer = new Uint8Array(64 + 20);
+    outer.set(oPad); outer.set(innerHash, 64);
+    return sha1(outer);
+  }
+
+  function base32ToBytes(b32) {
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-    let bits = 0;
-    let value = 0;
+    const clean = b32.toUpperCase().replace(/[\s=-]/g, "");
+    let bits = 0, val = 0;
     const bytes = [];
-    for (let i = 0; i < base32.length; i++) {
-      const idx = alphabet.indexOf(base32[i].toUpperCase());
+    for (let i = 0; i < clean.length; i++) {
+      const idx = alphabet.indexOf(clean[i]);
       if (idx === -1) continue;
-      value = (value << 5) | idx;
+      val = (val << 5) | idx;
       bits += 5;
       if (bits >= 8) {
-        bytes.push((value >>> (bits - 8)) & 255);
+        bytes.push((val >>> (bits - 8)) & 255);
         bits -= 8;
       }
     }
     return new Uint8Array(bytes);
   }
 
-  async function generateTOTP(secret, offsetSeconds = 0) {
+  function computeTOTP(secret, epoch) {
+    if (!secret) return "—";
     try {
-      if (!secret) return "—";
-      const base32 = secret.replace(/\s/g, "");
-      const keyBytes = base32ToBytes(base32);
+      const keyBytes = base32ToBytes(secret);
       if (keyBytes.length === 0) return "—";
-
-      const epoch = Math.floor(Date.now() / 1000) + offsetSeconds;
-      const time = Math.floor(epoch / 30);
-
-      const timeBuffer = new ArrayBuffer(8);
-      const view = new DataView(timeBuffer);
-      view.setUint32(4, time);
-
-      const cryptoKey = await window.crypto.subtle.importKey(
-        "raw",
-        keyBytes,
-        { name: "HMAC", hash: { name: "SHA-1" } },
-        false,
-        ["sign"]
-      );
-
-      const signature = await window.crypto.subtle.sign("HMAC", cryptoKey, timeBuffer);
-      const hmac = new Uint8Array(signature);
-      const offset = hmac[hmac.length - 1] & 0xf;
+      const counter = Math.floor((epoch || Math.floor(Date.now() / 1000)) / 30);
+      const buf = new Uint8Array(8);
+      const dv = new DataView(buf.buffer);
+      dv.setUint32(4, counter, false);
+      const hmac = hmacSha1(keyBytes, buf);
+      const offset = hmac[19] & 0x0f;
       const binary =
         ((hmac[offset] & 0x7f) << 24) |
         ((hmac[offset + 1] & 0xff) << 16) |
-        ((hmac[offset + 2] & 8) << 8) | // safe bitwise ops
+        ((hmac[offset + 2] & 8) << 8) | // fallback
         ((hmac[offset + 1] & 0xff) << 16) |
         ((hmac[offset + 2] & 0xff) << 8) |
         (hmac[offset + 3] & 0xff);
-
-      return (binary % 1000000).toString().padStart(6, "0");
-    } catch (err) {
-      console.error("Error generating TOTP:", err);
-      return "Error";
-    }
-  }
-
-  // Exact standard RFC 6238 TOTP implementation
-  async function computeCode(secret) {
-    if (!secret) return "—";
-    try {
-      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-      const clean = secret.toUpperCase().replace(/[\s=-]/g, "");
-      let bits = 0;
-      let val = 0;
-      const bytes = [];
-      for (let i = 0; i < clean.length; i++) {
-        const idx = alphabet.indexOf(clean[i]);
-        if (idx === -1) continue;
-        val = (val << 5) | idx;
-        bits += 5;
-        if (bits >= 8) {
-          bytes.push((val >>> (bits - 8)) & 255);
-          bits -= 8;
-        }
-      }
-      if (bytes.length === 0) return "—";
-
-      const epoch = Math.floor(Date.now() / 1000);
-      const counter = Math.floor(epoch / 30);
-      const buf = new ArrayBuffer(8);
-      const dv = new DataView(buf);
-      dv.setUint32(4, counter);
-
-      const key = await window.crypto.subtle.importKey(
-        "raw",
-        new Uint8Array(bytes),
-        { name: "HMAC", hash: "SHA-1" },
-        false,
-        ["sign"]
-      );
-      const sig = await window.crypto.subtle.sign("HMAC", key, buf);
-      const h = new Uint8Array(sig);
-      const offset = h[h.length - 1] & 0x0f;
-      const binary =
-        ((h[offset] & 0x7f) << 24) |
-        ((h[offset + 1] & 0xff) << 16) |
-        ((h[offset + 2] & 0xff) << 8) |
-        (h[offset + 3] & 0xff);
       return (binary % 1000000).toString().padStart(6, "0");
     } catch (e) {
-      console.error("TOTP compute error:", e);
       return "—";
     }
   }
 
-  // Map tracking buttons currently in "showing time left" active state: rowId -> secret
-  const activeCopiedButtons = new Map();
+  // Ring circumference for r=11: 2 * Math.PI * 11 ≈ 69.115
+  const CIRCUMFERENCE = 69.115;
+
+  let lastPeriod = -1;
+
+  function updateTickerTick() {
+    const epoch = Math.floor(Date.now() / 1000);
+    const secsLeft = 30 - (epoch % 30);
+    const period = Math.floor(epoch / 30);
+    const periodChanged = period !== lastPeriod;
+    lastPeriod = period;
+
+    // Fraction elapsed from 30 down to 0
+    // dashoffset = CIRCUMFERENCE * (1 - secsLeft / 30)
+    const offset = CIRCUMFERENCE * (1 - (secsLeft / 30));
+
+    // Global header countdown
+    const globalCountSpans = document.querySelectorAll(".totp-countdown-global");
+    globalCountSpans.forEach(span => {
+      span.textContent = `${secsLeft}s`;
+      span.style.color = secsLeft <= 5 ? "#ef4444" : "#10b981";
+    });
+
+    // Update all radial rings & seconds text
+    const ringProgresses = document.querySelectorAll(".totp-ring-progress");
+    ringProgresses.forEach(circle => {
+      circle.style.strokeDashoffset = offset;
+      if (secsLeft <= 5) {
+        circle.className.baseVal = "totp-ring-progress danger";
+      } else if (secsLeft <= 10) {
+        circle.className.baseVal = "totp-ring-progress warning";
+      } else {
+        circle.className.baseVal = "totp-ring-progress";
+      }
+    });
+
+    const ringTexts = document.querySelectorAll(".totp-ring-text");
+    ringTexts.forEach(txt => {
+      txt.textContent = `${secsLeft}`;
+      if (secsLeft <= 5) {
+        txt.className = "totp-ring-text danger";
+      } else {
+        txt.className = "totp-ring-text";
+      }
+    });
+
+    // If period changed or initial run, compute and refresh codes
+    if (periodChanged) {
+      for (let i = 0; i < activeTotpItems.length; i++) {
+        const item = activeTotpItems[i];
+        const code = computeTOTP(item.secret, epoch);
+        const codeEl = document.getElementById(item.id);
+        if (codeEl) codeEl.textContent = code;
+        const btn = document.getElementById(`btn-${item.id}`);
+        if (btn) btn.dataset.code = code;
+      }
+    }
+  }
 
   function startTotpTicker() {
     stopTotpTicker();
-    const updateAllCodes = async () => {
-      const epoch = Math.floor(Date.now() / 1000);
-      const secsLeft = 30 - (epoch % 30);
-      const timerSpans = document.querySelectorAll(".totp-countdown-global");
-      timerSpans.forEach(span => {
-        span.textContent = `${secsLeft}s`;
-        if (secsLeft <= 5) {
-          span.style.color = "#ef4444";
-        } else {
-          span.style.color = "#10b981";
-        }
-      });
-
-      for (const item of activeTotpGenerators) {
-        const el = document.getElementById(item.id);
-        const copyBtn = document.getElementById(`copy-${item.id}`);
-        const code = await computeCode(item.secret);
-
-        if (el) {
-          el.textContent = code;
-        }
-        if (copyBtn) {
-          copyBtn.dataset.code = code;
-          // If this button was clicked and is in "time left" countdown mode:
-          if (activeCopiedButtons.has(item.id)) {
-            copyBtn.classList.add("copied");
-            if (secsLeft <= 5) {
-              copyBtn.classList.add("urgent");
-            } else {
-              copyBtn.classList.remove("urgent");
-            }
-            copyBtn.innerHTML = `<i class="fa-solid fa-stopwatch"></i> <span>${secsLeft}s left</span>`;
-          }
-        }
-      }
-    };
-
-    updateAllCodes();
-    accountsTotpInterval = setInterval(updateAllCodes, 1000);
+    lastPeriod = -1; // force code generation on first tick
+    updateTickerTick();
+    accountsTotpInterval = setInterval(updateTickerTick, 1000);
   }
 
   function stopTotpTicker() {
@@ -251,7 +265,7 @@ window.Accounts = (() => {
       clearInterval(accountsTotpInterval);
       accountsTotpInterval = null;
     }
-    activeTotpGenerators = [];
+    activeTotpItems = [];
   }
 
   function toggleAnghamiLinks() {
@@ -269,7 +283,7 @@ window.Accounts = (() => {
     accService.addEventListener("change", toggleAnghamiLinks);
   }
 
-  // Mark an issue as fixed
+  // Mark issue as fixed
   const markAsFixed = async (id) => {
     clearMessageAccs();
     showSpinnerAccs(true);
@@ -287,7 +301,6 @@ window.Accounts = (() => {
       if (json.error) throw new Error(json.error);
       if (json.success) {
         showMessageAccs(`Issue #${id} marked as fixed!`, "success");
-        
         const view = accountsViewSelector.value;
         const btn = accountsIssuesTableBody.querySelector(`button.mark-fixed-btn[data-id="${id}"]`);
         if (btn) {
@@ -310,7 +323,7 @@ window.Accounts = (() => {
     }
   };
 
-  // Delete an account (when `used=0`)
+  // Delete an account (when used=0)
   const deleteAcc = async (email) => {
     clearMessageAccs();
     showSpinnerAccs(true);
@@ -329,9 +342,7 @@ window.Accounts = (() => {
       if (json.success) {
         showMessageAccs(`Account ${email} deleted!`, "success");
         const btn = accountsIssuesTableBody.querySelector(`button.delete-acc-btn[data-email="${email}"]`);
-        if (btn) {
-          btn.closest("tr")?.remove();
-        }
+        if (btn) btn.closest("tr")?.remove();
       }
     } catch (err) {
       console.error("Error deleting account:", err);
@@ -349,9 +360,7 @@ window.Accounts = (() => {
     if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
       try {
         parsedJson = JSON.parse(trimmed);
-      } catch (e) {
-        // Not valid JSON
-      }
+      } catch (e) {}
     }
 
     let accessToken = "";
@@ -379,7 +388,6 @@ window.Accounts = (() => {
       accessToken = trimmed;
     }
 
-    // Try decoding JWT for accessToken to extract claims & email
     if (accessToken) {
       try {
         const parts = accessToken.split(".");
@@ -423,7 +431,6 @@ window.Accounts = (() => {
     };
   };
 
-  // Open the Add Token Modal
   const openTokenModal = (defaultEmail = "") => {
     if (!cancelModal || !modalContent) return;
     const template = document.getElementById("add-token-modal-template");
@@ -454,7 +461,7 @@ window.Accounts = (() => {
       if (parsed.targetEmail && (!emailInput.value || emailInput.value === defaultEmail)) {
         emailInput.value = parsed.targetEmail;
       }
-      
+
       let expStr = "Unknown";
       if (parsed.expTimestamp) {
         expStr = new Date(parsed.expTimestamp * 1000).toLocaleString();
@@ -506,7 +513,6 @@ window.Accounts = (() => {
         saveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving...`;
 
         try {
-          // Prepare DB record
           const updateRecord = {
             email: finalEmail,
             cookies: parsed.cookies || {},
@@ -520,7 +526,6 @@ window.Accounts = (() => {
 
           let success = false;
 
-          // Attempt 1: Direct Supabase client upsert (authenticated)
           if (window.supabaseClient) {
             const { error: sbErr } = await window.supabaseClient
               .from("gpt_account_tokens")
@@ -532,7 +537,6 @@ window.Accounts = (() => {
             }
           }
 
-          // Attempt 2: Edge function save_gpt_token fallback if direct client failed
           if (!success) {
             const token = await getAuthToken();
             const res = await fetch(`${window.SUPABASE_URL}/functions/v1/save_gpt_token`, {
@@ -554,7 +558,7 @@ window.Accounts = (() => {
           }
 
           msgDiv.innerHTML = `<span style="color:#10b981; font-weight:600;"><i class="fa-solid fa-circle-check"></i> Token saved successfully for ${finalEmail}!</span>`;
-          
+
           setTimeout(() => {
             cancelModal.style.display = "none";
             if (accountsViewSelector.value === "custom_domain_accounts") {
@@ -573,7 +577,6 @@ window.Accounts = (() => {
     }
   };
 
-  // Fetch and render accounts or issues based on selected action
   const fetchAccountsOrIssues = async (action) => {
     clearMessageAccs();
     showSpinnerAccs(true);
@@ -585,18 +588,16 @@ window.Accounts = (() => {
       const token = await getAuthToken();
 
       if (action === "custom_domain_accounts") {
-        // Custom Domain Accounts view (All emails, passwords & current verification codes from 'accounts' excluding normal providers)
         accountsIssuesTitle.innerHTML = `
-          <span>Custom Domain Accounts (ChatGPT & Team Accounts)</span>
+          <span>Custom Domain Accounts</span>
           <span style="font-size:0.82rem; font-weight:normal; color:var(--text-muted); margin-left:12px;">
-            TOTP refreshes in <strong class="totp-countdown-global" style="color:#10b981;">30s</strong>
+            Live 2FA synced (<strong class="totp-countdown-global" style="color:#10b981;">30s</strong> cycle)
           </span>
         `;
 
         let accs = [];
         let tokenMap = new Map();
 
-        // Query accounts and tokens (client or edge function)
         let fetchedViaClient = false;
         if (window.supabaseClient) {
           try {
@@ -635,7 +636,6 @@ window.Accounts = (() => {
           accs = json.accounts || [];
         }
 
-        // Filter out normal email providers (gmail, hotmail, outlook, yahoo, icloud, etc.)
         const normalProviders = new Set([
           "gmail.com",
           "googlemail.com",
@@ -655,7 +655,6 @@ window.Accounts = (() => {
           return domain && !normalProviders.has(domain);
         });
 
-        // Sort by domain then email
         customDomainAccounts.sort((a, b) => {
           const dA = (a.email || "").split("@").pop();
           const dB = (b.email || "").split("@").pop();
@@ -668,7 +667,7 @@ window.Accounts = (() => {
           <tr>
             <th style="width: 28%;">Account <button class="sort-btn" data-column="0">↕️</button></th>
             <th style="width: 22%;">Password <button class="sort-btn" data-column="1">↕️</button></th>
-            <th style="width: 26%;">Verification Code <button class="sort-btn" data-column="2">↕️</button></th>
+            <th style="width: 26%;">Current Code (2FA) <button class="sort-btn" data-column="2">↕️</button></th>
             <th style="width: 12%;">Token Status <button class="sort-btn" data-column="3">↕️</button></th>
             <th style="width: 12%; text-align: right;">Token</th>
           </tr>`;
@@ -715,15 +714,29 @@ window.Accounts = (() => {
 
             let codeDisplay = "";
             if (key) {
-              activeTotpGenerators.push({ id: rowId, secret: key });
+              activeTotpItems.push({ id: rowId, secret: key });
+              // Compute initial code immediately without waiting
+              const initialCode = computeTOTP(key);
+
               codeDisplay = `
-                <div class="acc-totp-unit">
-                  <div class="acc-totp-badge">
-                    <i class="fa-solid fa-shield-halved" style="color:#38bdf8; font-size:0.85rem;"></i>
-                    <span id="${rowId}" class="acc-totp-digits">...</span>
+                <div class="totp-chip">
+                  <!-- Radial Progress Timer -->
+                  <div class="totp-ring-box" title="Validity countdown">
+                    <svg class="totp-ring-svg" viewBox="0 0 28 28">
+                      <circle class="totp-ring-bg" cx="14" cy="14" r="11"></circle>
+                      <circle class="totp-ring-progress" cx="14" cy="14" r="11" stroke-dasharray="69.115" stroke-dashoffset="0"></circle>
+                    </svg>
+                    <span class="totp-ring-text">30</span>
                   </div>
-                  <button id="copy-${rowId}" class="copy-totp-btn btn-totp-copy" data-row-id="${rowId}" data-secret="${key}" data-code="" title="Copy Code">
-                    <i class="fa-regular fa-copy"></i> <span>Copy Code</span>
+
+                  <!-- 6-digit TOTP code with click-to-copy -->
+                  <span id="${rowId}" class="totp-code-display" title="Click to copy code" data-copy="${initialCode}">
+                    ${initialCode}
+                  </span>
+
+                  <!-- Dedicated Copy Button -->
+                  <button id="btn-${rowId}" class="btn-copy-chip copy-totp-icon-btn" data-row-id="${rowId}" data-secret="${key}" data-code="${initialCode}" title="Copy Code">
+                    <i class="fa-regular fa-copy"></i>
                   </button>
                 </div>
               `;
@@ -771,12 +784,11 @@ window.Accounts = (() => {
             accountsIssuesTableBody.appendChild(tr);
           });
 
-          // Start real-time generator
+          // Launch synchronous real-time timer
           startTotpTicker();
         }
 
       } else {
-        // Standard Netflix accs or issues views
         const response = await fetch(window.SUPABASE_URL + "/functions/v1/fetchpendingpayment", {
           method: "POST",
           headers: {
@@ -859,9 +871,7 @@ window.Accounts = (() => {
     }
   };
 
-  // Initialize event listeners for Accounts page
   const init = () => {
-    // New account form submission
     if (addAccForm) {
       addAccForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -920,24 +930,21 @@ window.Accounts = (() => {
       });
     }
 
-    // View selector listener
     if (accountsViewSelector) {
       accountsViewSelector.addEventListener("change", (e) => {
         fetchAccountsOrIssues(accountsViewSelector.value);
       });
     }
 
-    // Top Add Token button listener
     if (openTokenModalBtn) {
       openTokenModalBtn.addEventListener("click", () => {
         openTokenModal("");
       });
     }
 
-    // Table click listener for actions
     if (accountsIssuesTableBody) {
       accountsIssuesTableBody.addEventListener("click", async (e) => {
-        // Handle delegated data-copy clicks
+        // 1. Delegated generic copy handler (email, pass, code text)
         const copyTarget = e.target.closest("[data-copy]");
         if (copyTarget && !copyTarget.closest("button")) {
           const val = copyTarget.dataset.copy;
@@ -947,10 +954,34 @@ window.Accounts = (() => {
             return;
           }
         }
+
+        // 2. Button clicks
         const btn = e.target.closest("button");
         if (!btn) return;
 
-        if (btn.classList.contains("mark-fixed-btn")) {
+        if (btn.classList.contains("copy-totp-icon-btn")) {
+          const rowId = btn.dataset.rowId;
+          const secret = btn.dataset.secret;
+          let code = btn.dataset.code;
+
+          if (!code || code === "—") {
+            code = computeTOTP(secret);
+          }
+
+          if (code && code !== "—") {
+            await navigator.clipboard.writeText(code);
+            showMessageAccs(`Copied verification code ${code}!`, "success");
+
+            // Instant visual feedback: turn icon into green checkmark
+            btn.classList.add("just-copied");
+            btn.innerHTML = `<i class="fa-solid fa-check"></i>`;
+
+            setTimeout(() => {
+              btn.classList.remove("just-copied");
+              btn.innerHTML = `<i class="fa-regular fa-copy"></i>`;
+            }, 1800);
+          }
+        } else if (btn.classList.contains("mark-fixed-btn")) {
           const id = btn.dataset.id;
           const oldText = btn.textContent;
           try {
@@ -973,41 +1004,6 @@ window.Accounts = (() => {
             btn.disabled = false;
             btn.textContent = oldText;
           }
-        } else if (btn.classList.contains("copy-totp-btn")) {
-          const rowId = btn.dataset.rowId;
-          const secret = btn.dataset.secret;
-          let code = btn.dataset.code;
-
-          // If code is not computed yet, compute it immediately
-          if (!code || code === "..." || code === "—") {
-            code = await computeCode(secret);
-            btn.dataset.code = code;
-            const spanEl = document.getElementById(rowId);
-            if (spanEl) spanEl.textContent = code;
-          }
-
-          if (code && code !== "—") {
-            await navigator.clipboard.writeText(code);
-            showMessageAccs(`Copied verification code ${code}!`, "success");
-
-            // Calculate initial time left
-            const epoch = Math.floor(Date.now() / 1000);
-            const secsLeft = 30 - (epoch % 30);
-
-            // Set to countdown display immediately
-            activeCopiedButtons.set(rowId, secret);
-            btn.classList.add("copied");
-            if (secsLeft <= 5) btn.classList.add("urgent");
-            btn.innerHTML = `<i class="fa-solid fa-stopwatch"></i> <span>${secsLeft}s left</span>`;
-
-            // Revert back cleanly after 8 seconds
-            if (btn._revertTimeout) clearTimeout(btn._revertTimeout);
-            btn._revertTimeout = setTimeout(() => {
-              activeCopiedButtons.delete(rowId);
-              btn.classList.remove("copied", "urgent");
-              btn.innerHTML = `<i class="fa-regular fa-copy"></i> <span>Copy Code</span>`;
-            }, 8000);
-          }
         } else if (btn.classList.contains("add-token-row-btn")) {
           const email = btn.dataset.email;
           openTokenModal(email);
@@ -1015,13 +1011,11 @@ window.Accounts = (() => {
       });
     }
 
-    // Fetch default view
     if (accountsViewSelector) {
       fetchAccountsOrIssues(accountsViewSelector.value);
     }
   };
 
-  // Expose module methods
   return {
     showSpinnerAccs,
     showMessageAccs,

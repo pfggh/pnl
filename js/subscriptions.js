@@ -931,10 +931,12 @@ window.Subscriptions = (() => {
         const s6 = j.anghami_stock["6m"] ?? 0;
         const sy = j.anghami_stock["1y"] ?? 0;
 
-        if (kpiEls.anghamiStock1m) kpiEls.anghamiStock1m.textContent = s1;
-        if (kpiEls.anghamiStock3m) kpiEls.anghamiStock3m.textContent = s3;
-        if (kpiEls.anghamiStock6m) kpiEls.anghamiStock6m.textContent = s6;
-        if (kpiEls.anghamiStock1y) kpiEls.anghamiStock1y.textContent = sy;
+        // KPI badges: exclusive buckets (each invite counted once)
+        const b = j.anghami_stock_buckets || {};
+        if (kpiEls.anghamiStock1m) kpiEls.anghamiStock1m.textContent = b["1_2m"] ?? s1;
+        if (kpiEls.anghamiStock3m) kpiEls.anghamiStock3m.textContent = b["3_5m"] ?? s3;
+        if (kpiEls.anghamiStock6m) kpiEls.anghamiStock6m.textContent = b["6_11m"] ?? s6;
+        if (kpiEls.anghamiStock1y) kpiEls.anghamiStock1y.textContent = b["1y"] ?? sy;
 
         if (kpiEls.formStock1m) kpiEls.formStock1m.textContent = s1;
         if (kpiEls.formStock3m) kpiEls.formStock3m.textContent = s3;
