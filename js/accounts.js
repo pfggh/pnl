@@ -220,10 +220,13 @@ window.Accounts = (() => {
           copyBtn.dataset.code = code;
           // If this button was clicked and is in "time left" countdown mode:
           if (activeCopiedButtons.has(item.id)) {
-            copyBtn.innerHTML = `<i class="fa-solid fa-clock" style="color:#f59e0b;"></i> ${secsLeft}s left`;
-            copyBtn.style.background = secsLeft <= 5 ? "rgba(239, 68, 68, 0.2)" : "rgba(245, 158, 11, 0.2)";
-            copyBtn.style.borderColor = secsLeft <= 5 ? "#ef4444" : "#f59e0b";
-            copyBtn.style.color = secsLeft <= 5 ? "#ef4444" : "#fbbf24";
+            copyBtn.classList.add("copied");
+            if (secsLeft <= 5) {
+              copyBtn.classList.add("urgent");
+            } else {
+              copyBtn.classList.remove("urgent");
+            }
+            copyBtn.innerHTML = `<i class="fa-solid fa-stopwatch"></i> <span>${secsLeft}s left</span>`;
           }
         }
       }
@@ -646,22 +649,24 @@ window.Accounts = (() => {
           return (a.email || "").localeCompare(b.email || "");
         });
 
+        accountsIssuesTable.classList.add("accounts-table");
         accountsIssuesTableHead.innerHTML = `
           <tr>
-            <th>Email <button class="sort-btn" data-column="0">↕️</button></th>
-            <th>Password <button class="sort-btn" data-column="1">↕️</button></th>
-            <th>Verification Code (2FA) <button class="sort-btn" data-column="2">↕️</button></th>
-            <th>Token Status <button class="sort-btn" data-column="3">↕️</button></th>
-            <th>Action</th>
+            <th style="width: 28%;">Account <button class="sort-btn" data-column="0">↕️</button></th>
+            <th style="width: 22%;">Password <button class="sort-btn" data-column="1">↕️</button></th>
+            <th style="width: 26%;">Verification Code <button class="sort-btn" data-column="2">↕️</button></th>
+            <th style="width: 12%;">Token Status <button class="sort-btn" data-column="3">↕️</button></th>
+            <th style="width: 12%; text-align: right;">Token</th>
           </tr>`;
 
         if (customDomainAccounts.length === 0) {
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="5" style="text-align:center; padding:30px; color:var(--text-muted);">No custom domain accounts found in 'accounts'.</td>`;
+          tr.innerHTML = `<td colspan="5" style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.92rem;"><i class="fa-solid fa-inbox" style="font-size:1.8rem; display:block; margin-bottom:10px; opacity:0.5;"></i>No custom domain accounts found.</td>`;
           accountsIssuesTableBody.appendChild(tr);
         } else {
           customDomainAccounts.forEach((row, idx) => {
             const em = (row.email || "").trim();
+            const domain = em.includes("@") ? em.split("@")[1].toLowerCase() : "";
             const pass = row.password || "";
             const key = (row.two_factor_key || "").trim();
             const rowId = `totp-code-${row.id || idx}`;
@@ -674,22 +679,22 @@ window.Accounts = (() => {
               if (exp) {
                 const nowSec = Math.floor(Date.now() / 1000);
                 if (exp < nowSec) {
-                  expInfo = `<span style="color:#ef4444; font-size:0.75rem; display:block;">Expired</span>`;
+                  expInfo = `<span style="color:#f87171; font-size:0.72rem; margin-top:2px;">Expired</span>`;
                 } else {
                   const days = Math.round((exp - nowSec) / 86400);
-                  expInfo = `<span style="color:#10b981; font-size:0.75rem; display:block;">Exp in ${days}d</span>`;
+                  expInfo = `<span style="color:#34d399; font-size:0.72rem; margin-top:2px;">Valid ${days}d</span>`;
                 }
               }
               tokenStatusBadge = `
                 <div style="display:inline-flex; flex-direction:column;">
-                  <span class="badge" style="background:rgba(16, 185, 129, 0.15); color:#10b981; border:1px solid rgba(16, 185, 129, 0.3); padding:3px 8px; border-radius:6px; font-size:0.78rem; font-weight:600;">
+                  <span class="status-pill active">
                     <i class="fa-solid fa-circle-check"></i> Active
                   </span>
                   ${expInfo}
                 </div>`;
             } else {
               tokenStatusBadge = `
-                <span class="badge" style="background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.3); padding:3px 8px; border-radius:6px; font-size:0.78rem;">
+                <span class="status-pill missing">
                   <i class="fa-solid fa-circle-xmark"></i> Missing
                 </span>`;
             }
@@ -698,28 +703,40 @@ window.Accounts = (() => {
             if (key) {
               activeTotpGenerators.push({ id: rowId, secret: key });
               codeDisplay = `
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <span id="${rowId}" style="font-family:monospace; font-size:1.05rem; font-weight:700; color:#38bdf8; letter-spacing:1px;">...</span>
-                  <button id="copy-${rowId}" class="copy-totp-btn pill-btn" data-row-id="${rowId}" data-secret="${key}" data-code="" style="padding:5px 10px; font-size:0.75rem; background:rgba(56, 189, 248, 0.15); border-color:rgba(56, 189, 248, 0.4); color:#38bdf8; display:inline-flex; align-items:center; gap:5px; transition:all 0.2s ease;">
-                    <i class="fa-regular fa-copy"></i> Copy Code
+                <div class="acc-totp-unit">
+                  <div class="acc-totp-badge">
+                    <i class="fa-solid fa-shield-halved" style="color:#38bdf8; font-size:0.85rem;"></i>
+                    <span id="${rowId}" class="acc-totp-digits">...</span>
+                  </div>
+                  <button id="copy-${rowId}" class="copy-totp-btn btn-totp-copy" data-row-id="${rowId}" data-secret="${key}" data-code="" title="Copy Code">
+                    <i class="fa-regular fa-copy"></i> <span>Copy Code</span>
                   </button>
                 </div>
               `;
             } else {
-              codeDisplay = `<span style="color:var(--text-muted); font-size:0.8rem;">No 2FA key</span>`;
+              codeDisplay = `<span style="color:#64748b; font-size:0.78rem; font-style:italic;">No 2FA secret</span>`;
             }
 
             const tr = document.createElement("tr");
             tr.innerHTML = `
-              <td data-label="Email">
-                <span class="truncate-text" title="Click to copy email" style="cursor:pointer; font-weight:500;" onclick="navigator.clipboard.writeText('${em}'); window.Accounts.showMessageAccs('Copied email!', 'success')">
-                  ${em}
-                </span>
+              <td data-label="Account">
+                <div class="acc-identity">
+                  <div class="acc-avatar">
+                    <i class="fa-solid fa-server"></i>
+                  </div>
+                  <div class="acc-details">
+                    <span class="acc-email-text" title="Click to copy email" onclick="navigator.clipboard.writeText('${em}'); window.Accounts.showMessageAccs('Copied email to clipboard!', 'success')">
+                      ${em} <i class="fa-regular fa-copy" style="font-size:0.72rem; opacity:0.6;"></i>
+                    </span>
+                    <span class="acc-domain-tag">@${domain}</span>
+                  </div>
+                </div>
               </td>
               <td data-label="Password">
-                <span class="truncate-text" title="Click to copy password" style="cursor:pointer; font-family:monospace;" onclick="navigator.clipboard.writeText('${pass.replace(/'/g, "\\'")}'); window.Accounts.showMessageAccs('Copied password!', 'success')">
-                  ${pass || "—"}
-                </span>
+                <div class="acc-pass-pill" title="Click to copy password" onclick="navigator.clipboard.writeText('${pass.replace(/'/g, "\'")}'); window.Accounts.showMessageAccs('Copied password to clipboard!', 'success')">
+                  <span class="acc-pass-code">${pass || "—"}</span>
+                  <i class="fa-regular fa-copy acc-pass-icon"></i>
+                </div>
               </td>
               <td data-label="Verification Code">
                 ${codeDisplay}
@@ -727,9 +744,9 @@ window.Accounts = (() => {
               <td data-label="Token Status">
                 ${tokenStatusBadge}
               </td>
-              <td data-label="Action">
-                <button class="pill-btn add-token-row-btn" data-email="${em}" style="padding:6px 12px; font-size:0.78rem; background:rgba(16, 185, 129, 0.15); border-color:#10b981; color:#34d399;">
-                  <i class="fa-solid fa-key" style="color:#34d399;"></i> Add / Update Token
+              <td data-label="Action" style="text-align: right;">
+                <button class="btn-row-token add-token-row-btn" data-email="${em}" title="Add/Update Token">
+                  <i class="fa-solid fa-key" style="color:#10b981;"></i> Update
                 </button>
               </td>
             `;
@@ -951,20 +968,17 @@ window.Accounts = (() => {
 
             // Set to countdown display immediately
             activeCopiedButtons.set(rowId, secret);
-            btn.innerHTML = `<i class="fa-solid fa-clock" style="color:#f59e0b;"></i> ${secsLeft}s left`;
-            btn.style.background = secsLeft <= 5 ? "rgba(239, 68, 68, 0.2)" : "rgba(245, 158, 11, 0.2)";
-            btn.style.borderColor = secsLeft <= 5 ? "#ef4444" : "#f59e0b";
-            btn.style.color = secsLeft <= 5 ? "#ef4444" : "#fbbf24";
+            btn.classList.add("copied");
+            if (secsLeft <= 5) btn.classList.add("urgent");
+            btn.innerHTML = `<i class="fa-solid fa-stopwatch"></i> <span>${secsLeft}s left</span>`;
 
-            // Revert back to "Copy Code" button after 10 seconds or when countdown finishes
+            // Revert back cleanly after 8 seconds
             if (btn._revertTimeout) clearTimeout(btn._revertTimeout);
             btn._revertTimeout = setTimeout(() => {
               activeCopiedButtons.delete(rowId);
-              btn.innerHTML = `<i class="fa-regular fa-copy"></i> Copy Code`;
-              btn.style.background = "rgba(56, 189, 248, 0.15)";
-              btn.style.borderColor = "rgba(56, 189, 248, 0.4)";
-              btn.style.color = "#38bdf8";
-            }, 10000);
+              btn.classList.remove("copied", "urgent");
+              btn.innerHTML = `<i class="fa-regular fa-copy"></i> <span>Copy Code</span>`;
+            }, 8000);
           }
         } else if (btn.classList.contains("add-token-row-btn")) {
           const email = btn.dataset.email;

@@ -1250,3 +1250,323 @@ tr.ang-row-expired td:first-child {
     box-shadow: none;
   }
 }
+
+
+/* ==========================================================================
+   ENHANCED CUSTOM DOMAIN ACCOUNTS & VERIFICATION CODES STYLING
+   ========================================================================== */
+
+/* Enhanced Table Controls Bar */
+.accounts-controls-bar {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+  background: rgba(15, 23, 42, 0.45);
+  padding: 14px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.search-input-wrapper {
+  position: relative;
+  flex: 2;
+  min-width: 260px;
+}
+
+.search-input-wrapper i {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.search-input-wrapper input {
+  padding-left: 44px;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Header Action Button */
+.btn-primary-action {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  padding: 12px 22px !important;
+  border-radius: 14px !important;
+  border: none !important;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  cursor: pointer !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.btn-primary-action:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.45) !important;
+  filter: brightness(1.1) !important;
+}
+
+/* Clean Professional Table Layout */
+.accounts-table th {
+  padding: 16px 18px;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: #94a3b8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.accounts-table td {
+  padding: 14px 18px;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.accounts-table tr:hover td {
+  background: rgba(99, 102, 241, 0.03);
+}
+
+/* Account Identity Block */
+.acc-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.acc-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c7d2fe;
+  font-size: 0.88rem;
+  flex-shrink: 0;
+}
+
+.acc-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.acc-email-text {
+  font-weight: 600;
+  color: #f8fafc;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acc-email-text:hover {
+  color: #38bdf8;
+}
+
+.acc-domain-tag {
+  font-size: 0.7rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* Modern Password Pill */
+.acc-pass-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 6px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  max-width: 220px;
+}
+
+.acc-pass-pill:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.acc-pass-code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  letter-spacing: 0.5px;
+}
+
+.acc-pass-icon {
+  font-size: 0.75rem;
+  color: #64748b;
+  transition: color 0.2s;
+}
+
+.acc-pass-pill:hover .acc-pass-icon {
+  color: #38bdf8;
+}
+
+/* Real-time Verification Code Unit */
+.acc-totp-unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acc-totp-badge {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 6px 12px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acc-totp-digits {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #38bdf8;
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
+.btn-totp-copy {
+  border: none;
+  border-radius: 10px;
+  padding: 7px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+}
+
+.btn-totp-copy:hover {
+  background: rgba(56, 189, 248, 0.28);
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25);
+}
+
+.btn-totp-copy.copied {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #fbbf24;
+}
+
+.btn-totp-copy.urgent {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #f87171;
+  animation: pulseUrgent 1s infinite alternate;
+}
+
+@keyframes pulseUrgent {
+  from { box-shadow: 0 0 0 rgba(239, 68, 68, 0); }
+  to { box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+}
+
+/* Status Badges */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.status-pill.active {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+
+.status-pill.missing {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+}
+
+/* Row Action Button */
+.btn-row-token {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f1f5f9;
+  font-weight: 600;
+  font-size: 0.78rem;
+  padding: 7px 14px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-row-token:hover {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: #10b981;
+  color: #34d399;
+  transform: translateY(-1px);
+}
+
+/* Modal Form Polishing */
+.token-modal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.token-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 16px;
+}
+
+.token-modal-header i {
+  font-size: 1.4rem;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+  padding: 10px;
+  border-radius: 12px;
+}
+
+.token-modal-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.token-modal-sub {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
