@@ -1422,41 +1422,60 @@ tr.ang-row-expired td:first-child {
   color: #38bdf8;
 }
 
-/* Clean Real-Time 2FA Code Pill */
+/* On-Demand 2FA Verification Pill & Interactive Active Chip */
+.btn-get-code {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #38bdf8;
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-get-code:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25);
+}
+
+/* Active Real-Time Chip when user requests code */
 .totp-chip {
   display: inline-flex;
   align-items: center;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.35);
   border-radius: 12px;
-  padding: 4px 6px 4px 14px;
-  gap: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  transition: all 0.2s ease;
+  padding: 4px 6px 4px 12px;
+  gap: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  animation: fadeInCode 0.25s ease;
   user-select: none;
 }
 
-.totp-chip:hover {
-  border-color: rgba(56, 189, 248, 0.45);
-  background: rgba(15, 23, 42, 0.9);
-  box-shadow: 0 6px 18px rgba(56, 189, 248, 0.15);
+@keyframes fadeInCode {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 .totp-code-display {
   font-family: 'JetBrains Mono', 'Fira Code', 'Roboto Mono', monospace;
   font-size: 1.15rem;
   font-weight: 800;
-  letter-spacing: 2.5px;
+  letter-spacing: 2px;
   color: #38bdf8;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .totp-code-display:hover {
   color: #7dd3fc;
-  text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
 }
 
 /* 1-Click Copy Icon Button */
@@ -1465,35 +1484,35 @@ tr.ang-row-expired td:first-child {
   border: 1px solid rgba(56, 189, 248, 0.25);
   color: #38bdf8;
   border-radius: 8px;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   padding: 0;
 }
 
 .btn-copy-chip:hover {
   background: #38bdf8;
   color: #0f172a;
-  transform: scale(1.08);
+  transform: scale(1.06);
 }
 
 .btn-copy-chip.just-copied {
   background: #10b981 !important;
   border-color: #10b981 !important;
   color: #fff !important;
-  transform: scale(1.08);
+  transform: scale(1.06);
 }
 
 /* Circular Pie/Radial Progress Timer */
 .totp-ring-box {
   position: relative;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1502,8 +1521,8 @@ tr.ang-row-expired td:first-child {
 
 .totp-ring-svg {
   transform: rotate(-90deg);
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
 }
 
 .totp-ring-bg {
