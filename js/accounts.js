@@ -67,6 +67,16 @@ window.Accounts = (() => {
     }
   };
 
+  const escapeHtml = (str) => {
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
+
   const getAuthToken = async () => {
     try {
       if (window.supabaseClient?.auth) {
@@ -450,12 +460,16 @@ window.Accounts = (() => {
         expStr = new Date(parsed.expTimestamp * 1000).toLocaleString();
       }
 
+      const safeDetectedEmail = escapeHtml(parsed.targetEmail || emailInput.value || "");
+      const safePlanType = escapeHtml(parsed.planType || "Standard/Team");
+      const safeExpStr = escapeHtml(expStr);
+
       previewDetails.innerHTML = `
-        <div><strong>Detected Email:</strong> ${parsed.targetEmail || emailInput.value || '<span style="color:#f59e0b;">None (please specify)</span>'}</div>
+        <div><strong>Detected Email:</strong> ${safeDetectedEmail || '<span style="color:#f59e0b;">None (please specify)</span>'}</div>
         <div><strong>Access Token:</strong> ${parsed.accessToken ? '<span style="color:#10b981;"><i class="fa-solid fa-check"></i> Present (JWT)</span>' : '<span style="color:#ef4444;">Missing</span>'}</div>
         <div><strong>Session Token:</strong> ${parsed.sessionToken ? '<span style="color:#10b981;"><i class="fa-solid fa-check"></i> Present</span>' : '<span style="color:#94a3b8;">None</span>'}</div>
-        <div><strong>Plan Type:</strong> ${parsed.planType || 'Standard/Team'}</div>
-        <div><strong>Expires At:</strong> ${expStr}</div>
+        <div><strong>Plan Type:</strong> ${safePlanType}</div>
+        <div><strong>Expires At:</strong> ${safeExpStr}</div>
       `;
     };
 
@@ -717,6 +731,10 @@ window.Accounts = (() => {
               codeDisplay = `<span style="color:#64748b; font-size:0.78rem; font-style:italic;">No 2FA secret</span>`;
             }
 
+            const safeEm = escapeHtml(em);
+            const safeDomain = escapeHtml(domain);
+            const safePass = escapeHtml(pass);
+
             const tr = document.createElement("tr");
             tr.innerHTML = `
               <td data-label="Account">
@@ -725,16 +743,16 @@ window.Accounts = (() => {
                     <i class="fa-solid fa-server"></i>
                   </div>
                   <div class="acc-details">
-                    <span class="acc-email-text" title="Click to copy email" onclick="navigator.clipboard.writeText('${em}'); window.Accounts.showMessageAccs('Copied email to clipboard!', 'success')">
-                      ${em} <i class="fa-regular fa-copy" style="font-size:0.72rem; opacity:0.6;"></i>
+                    <span class="acc-email-text" title="Click to copy email" data-copy="${safeEm}">
+                      ${safeEm} <i class="fa-regular fa-copy" style="font-size:0.72rem; opacity:0.6;"></i>
                     </span>
-                    <span class="acc-domain-tag">@${domain}</span>
+                    <span class="acc-domain-tag">@${safeDomain}</span>
                   </div>
                 </div>
               </td>
               <td data-label="Password">
-                <div class="acc-pass-pill" title="Click to copy password" onclick="navigator.clipboard.writeText('${pass.replace(/'/g, "\'")}'); window.Accounts.showMessageAccs('Copied password to clipboard!', 'success')">
-                  <span class="acc-pass-code">${pass || "—"}</span>
+                <div class="acc-pass-pill" title="Click to copy password" data-copy="${safePass}">
+                  <span class="acc-pass-code">${safePass || "—"}</span>
                   <i class="fa-regular fa-copy acc-pass-icon"></i>
                 </div>
               </td>
@@ -745,7 +763,7 @@ window.Accounts = (() => {
                 ${tokenStatusBadge}
               </td>
               <td data-label="Action" style="text-align: right;">
-                <button class="btn-row-token add-token-row-btn" data-email="${em}" title="Add/Update Token">
+                <button class="btn-row-token add-token-row-btn" data-email="${safeEm}" title="Add/Update Token">
                   <i class="fa-solid fa-key" style="color:#10b981;"></i> Update
                 </button>
               </td>
@@ -919,6 +937,16 @@ window.Accounts = (() => {
     // Table click listener for actions
     if (accountsIssuesTableBody) {
       accountsIssuesTableBody.addEventListener("click", async (e) => {
+        // Handle delegated data-copy clicks
+        const copyTarget = e.target.closest("[data-copy]");
+        if (copyTarget && !copyTarget.closest("button")) {
+          const val = copyTarget.dataset.copy;
+          if (val) {
+            await navigator.clipboard.writeText(val);
+            showMessageAccs("Copied to clipboard!", "success");
+            return;
+          }
+        }
         const btn = e.target.closest("button");
         if (!btn) return;
 
