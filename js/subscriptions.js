@@ -1126,20 +1126,64 @@ window.Subscriptions = (() => {
   document.addEventListener("DOMContentLoaded", () => {
     const searchInput = document.getElementById("reactivate-link-input");
     const searchBtn = document.getElementById("reactivate-link-search-btn");
+    const selectContainer = document.getElementById("reactivate-link-select-container");
+    const selectLabel = document.getElementById("reactivate-link-select-label");
     const subSelect = document.getElementById("reactivate-link-sub-select");
     const reactBtn = document.getElementById("reactivate-link-btn");
+    const limitContainer = document.getElementById("reactivate-link-limit-container");
+    const limitPrompt = document.getElementById("reactivate-link-limit-prompt");
+    const devicesList = document.getElementById("reactivate-link-devices-list");
+    const forceBtn = document.getElementById("reactivate-link-force-btn");
+    const logoutBtn = document.getElementById("reactivate-link-logout-btn");
+    const backBtn = document.getElementById("reactivate-link-back-btn");
     const reactMsg = document.getElementById("reactivate-link-msg");
 
     let lastMatchList = [];
     let currentSearchType = ""; // "phone" or "link"
 
+    // Helper: Reset limit confirmation state back to standard selection view
+    const resetLimitState = () => {
+      if (limitContainer) limitContainer.style.display = "none";
+      if (devicesList) {
+        devicesList.style.display = "none";
+        devicesList.innerHTML = "";
+      }
+      if (reactBtn) {
+        reactBtn.style.display = "flex";
+        reactBtn.disabled = false;
+        reactBtn.innerHTML = `<i class="fa-solid fa-bolt" style="color:#fff"></i> Reactivate`;
+      }
+      if (forceBtn) {
+        forceBtn.disabled = false;
+        forceBtn.innerHTML = `<i class="fa-solid fa-bolt" style="color:#fbbf24;"></i> Reactivate Link`;
+      }
+      if (logoutBtn) {
+        logoutBtn.disabled = false;
+        logoutBtn.innerHTML = `<i class="fa-solid fa-arrow-right-from-bracket" style="color:#fff;"></i> Logout this user's devices`;
+      }
+    };
+
+    // Helper: Safely resolve authentication token
+    const getAuthToken = async () => {
+      try {
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        return session?.access_token || window.authToken;
+      } catch {
+        return window.authToken;
+      }
+    };
+
     if (searchBtn && searchInput && subSelect && reactBtn && reactMsg) {
+      // 1. Search button handler
       searchBtn.onclick = async () => {
+        resetLimitState();
+        if (selectContainer) selectContainer.style.display = "none";
         subSelect.style.display = "none";
         reactBtn.style.display = "none";
         reactMsg.innerHTML = "";
-        const val = searchInput.value.trim();
-        if (!val) {
+
+        const rawVal = searchInput.value.trim();
+        if (!rawVal) {
           reactMsg.innerHTML = `<span style="color:#ef4444;">Enter a phone number or link</span>`;
           return;
         }
@@ -1148,24 +1192,31 @@ window.Subscriptions = (() => {
         const oldText = searchBtn.innerHTML;
         searchBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i>`;
 
+        // Recognize UUID, full link, or normalize phone number
         let payload = {};
-        if (val.includes("http") || val.includes("?id=")) {
-          payload = { link: val };
+        const isUuidPattern = /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i.test(rawVal);
+        if (rawVal.includes("http") || rawVal.includes("?id=") || isUuidPattern) {
+          payload = { link: rawVal };
         } else {
-          payload = { phone: val };
+          const cleanPhone = rawVal.replace(/\D/g, "");
+          payload = { phone: cleanPhone || rawVal };
         }
 
         try {
+          const token = await getAuthToken();
           const res = await fetch(`${window.SUPABASE_URL}/functions/v1/reactivate_link`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${window.authToken}`
+              "Authorization": `Bearer ${token}`
             },
             body: JSON.stringify(payload)
           });
 
-          if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+          if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            throw new Error(errBody.error || `HTTP Error ${res.status}`);
+          }
           const data = await res.json();
           if (data.error) throw new Error(data.error);
 
@@ -1177,16 +1228,29 @@ window.Subscriptions = (() => {
             return;
           }
 
+          // Build select options with full contextual details
           subSelect.innerHTML = lastMatchList.map((m, idx) => {
             if (currentSearchType === "phone") {
+              const subIdPrefix = m.sub_id ? `#${m.sub_id} — ` : "";
               const exp = m.expiry ? formatCompactDate(m.expiry) : "No expiry";
-              return `<option value="${idx}">Email: ${m.accemail} (Exp: ${exp})</option>`;
+              const legacyTag = (!m.secret_id || m.is_legacy) ? " [Legacy]" : "";
+              const devTag = (m.device_count !== undefined && m.device_count !== null) ? ` (${m.device_count} dev)` : "";
+              return `<option value="${idx}">${subIdPrefix}${m.accemail || m.email || "Subscription"} (Exp: ${exp})${legacyTag}${devTag}</option>`;
             } else {
               const added = m.last_link ? formatCompactDate(m.last_link) : "N/A";
-              return `<option value="${idx}">Email: ${m.email} (Last Link: ${added})</option>`;
+              return `<option value="${idx}">Email: ${m.email || m.accemail} (Last Link: ${added})</option>`;
             }
           }).join("");
 
+          if (selectLabel) {
+            if (lastMatchList.length > 1) {
+              selectLabel.textContent = `Found ${lastMatchList.length} subscriptions. Select one to reactivate:`;
+            } else {
+              selectLabel.textContent = "Matching Subscription:";
+            }
+          }
+
+          if (selectContainer) selectContainer.style.display = "block";
           subSelect.style.display = "inline-block";
           reactBtn.style.display = "flex";
         } catch (err) {
@@ -1198,64 +1262,141 @@ window.Subscriptions = (() => {
         }
       };
 
-      reactBtn.onclick = async () => {
+      // Reset prompt state when admin switches dropdown
+      subSelect.onchange = () => {
+        resetLimitState();
+      };
+
+      // Allow Enter key to trigger search
+      searchInput.onkeydown = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          searchBtn.click();
+        }
+      };
+
+      // 2. Reactivate Action Dispatcher
+      const executeReactivation = async (actionType = "initial") => {
         const selectedIdx = subSelect.value;
         if (selectedIdx === "" || !lastMatchList[selectedIdx]) return;
-        
-        let payload = {};
+        const currentItem = lastMatchList[selectedIdx];
+
+        let basePayload = {};
         if (currentSearchType === "phone") {
-          const sub_id = lastMatchList[selectedIdx].sub_id || lastMatchList[selectedIdx].id;
+          const sub_id = currentItem.sub_id || currentItem.id;
           if (!sub_id) {
             reactMsg.innerHTML = `<span style="color:#ef4444;">Error: Could not determine subscription ID.</span>`;
             return;
           }
-          payload = { sub_id };
+          basePayload = { sub_id };
         } else {
-          const secret_id = lastMatchList[selectedIdx].secret_id;
+          const secret_id = currentItem.secret_id;
           if (!secret_id) {
             reactMsg.innerHTML = `<span style="color:#ef4444;">Error: Could not determine secret ID.</span>`;
             return;
           }
-          payload = { secret_id };
+          basePayload = { secret_id };
         }
 
-        reactBtn.disabled = true;
-        const oldBtnText = reactBtn.innerHTML;
-        reactBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i> Reactivating...`;
+        // Apply action flags
+        let finalPayload = { ...basePayload };
+        if (actionType === "force") {
+          finalPayload.action = "force_reactivate";
+          finalPayload.force = true;
+        } else if (actionType === "logout") {
+          finalPayload.action = "logout_and_reactivate";
+          finalPayload.logout_devices = true;
+        }
+
         reactMsg.innerHTML = "";
+        let oldBtnText = "";
+
+        if (actionType === "initial") {
+          reactBtn.disabled = true;
+          oldBtnText = reactBtn.innerHTML;
+          reactBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i> Reactivating...`;
+        } else if (actionType === "force") {
+          oldBtnText = forceBtn.innerHTML;
+          forceBtn.disabled = true;
+          logoutBtn.disabled = true;
+          forceBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fbbf24"></i> Reactivating...`;
+        } else if (actionType === "logout") {
+          oldBtnText = logoutBtn.innerHTML;
+          forceBtn.disabled = true;
+          logoutBtn.disabled = true;
+          logoutBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i> Revoking sessions...`;
+        }
 
         try {
+          const token = await getAuthToken();
           const res = await fetch(`${window.SUPABASE_URL}/functions/v1/reactivate_link`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${window.authToken}`
+              "Authorization": `Bearer ${token}`
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(finalPayload)
           });
 
-          if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(errorText || `HTTP Error ${res.status}`);
+          const result = await res.json().catch(() => ({}));
+
+          // Intercept 2-device limit response
+          const isLimitPrompt = result.limit_reached === true ||
+            result.prompt_confirmation === true ||
+            (result.status === "limit_reached") ||
+            (typeof result.message === "string" && result.message.toLowerCase().includes("2 devices limit"));
+
+          if (isLimitPrompt && actionType === "initial") {
+            reactBtn.style.display = "none";
+            if (limitContainer) limitContainer.style.display = "block";
+            if (limitPrompt) {
+              limitPrompt.textContent = result.message || "user has reached 2 devices limit. Are you sure u want to reactivate?";
+            }
+            if (devicesList) {
+              if (Array.isArray(result.devices) && result.devices.length > 0) {
+                devicesList.innerHTML = `<div style="font-weight:600; margin-bottom:4px; color:#94a3b8;">Active Devices (${result.devices.length}):</div>` +
+                  result.devices.map(d => `<div style="padding:2px 0;"><i class="fa-solid fa-laptop" style="margin-right:6px; color:#f59e0b;"></i>${d.display_name || d.platform || d.device_id || "Unknown device"}</div>`).join("");
+                devicesList.style.display = "block";
+              } else {
+                devicesList.style.display = "none";
+              }
+            }
+            return;
           }
 
-          const result = await res.json();
+          if (!res.ok) {
+            throw new Error(result.error || `HTTP Error ${res.status}`);
+          }
           if (result.error) throw new Error(result.error);
 
+          // Success: hide interaction controls
+          if (selectContainer) selectContainer.style.display = "none";
           subSelect.style.display = "none";
           reactBtn.style.display = "none";
+          if (limitContainer) limitContainer.style.display = "none";
 
           const searchContainer = document.getElementById("link-search-container");
           if (searchContainer) searchContainer.style.display = "none";
           const subTitle = document.getElementById("link-reactivate-sub-title");
           if (subTitle) subTitle.style.display = "none";
 
+          const linkUrl = result.secret_id ? `https://portal.teshrij.com/?id=${result.secret_id}` : (result.link || "");
+          const linkCopySection = linkUrl ? `
+            <div style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(16, 185, 129, 0.3); display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:0.8rem; color:#6ee7b7; word-break:break-all;">Link: <code style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px;">${linkUrl}</code></span>
+              <button class="copy-btn" data-value="${linkUrl}" style="padding:4px 8px; font-size:0.75rem; white-space:nowrap; margin-left:8px;"><i class="fa-regular fa-copy"></i> Copy Link</button>
+            </div>
+          ` : "";
+
           reactMsg.innerHTML = `
-            <div style="margin-top: 10px; background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 12px; border: 1px solid #10b981; text-align: left; font-size: 0.95rem; color: #10b981; margin-bottom: 15px;">
-              <i class="fa-solid fa-circle-check"></i> ${result.message || "Successfully reactivated!"}
+            <div style="margin-top: 10px; background: rgba(16, 185, 129, 0.1); padding: 16px; border-radius: 12px; border: 1px solid #10b981; text-align: left; font-size: 0.95rem; color: #10b981; margin-bottom: 15px;">
+              <div style="display:flex; align-items:center; gap:8px; font-weight:700;">
+                <i class="fa-solid fa-circle-check"></i> ${result.message || "Successfully reactivated!"}
+              </div>
+              ${linkCopySection}
             </div>
             <div style="display:flex;justify-content:center;margin-top:16px">
-              <button id="close-reactivate-link-btn" class="btn-primary" style="background:#10b981; border-color:#10b981;">Close</button>
+              <button id="close-reactivate-link-btn" class="btn-primary" style="background:#10b981; border-color:#10b981; padding:10px 24px; border-radius:12px; cursor:pointer;">Close</button>
             </div>
           `;
 
@@ -1270,10 +1411,26 @@ window.Subscriptions = (() => {
           console.error(err);
           reactMsg.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}</span>`;
         } finally {
-          reactBtn.disabled = false;
-          reactBtn.innerHTML = oldBtnText;
+          if (actionType === "initial") {
+            reactBtn.disabled = false;
+            reactBtn.innerHTML = oldBtnText;
+          } else if (actionType === "force") {
+            forceBtn.disabled = false;
+            logoutBtn.disabled = false;
+            forceBtn.innerHTML = oldBtnText;
+          } else if (actionType === "logout") {
+            forceBtn.disabled = false;
+            logoutBtn.disabled = false;
+            logoutBtn.innerHTML = oldBtnText;
+          }
         }
       };
+
+      // 3. Listener bindings
+      reactBtn.onclick = () => executeReactivation("initial");
+      if (forceBtn) forceBtn.onclick = () => executeReactivation("force");
+      if (logoutBtn) logoutBtn.onclick = () => executeReactivation("logout");
+      if (backBtn) backBtn.onclick = () => resetLimitState();
     }
   });
 
@@ -2399,13 +2556,21 @@ password: ${newPass}
       openReactivateLinkBtn.addEventListener("click", () => {
         const linkInput = document.getElementById("reactivate-link-input");
         if (linkInput) linkInput.value = "";
+        const selectContainer = document.getElementById("reactivate-link-select-container");
+        if (selectContainer) selectContainer.style.display = "none";
         const subSelect = document.getElementById("reactivate-link-sub-select");
         if (subSelect) {
           subSelect.style.display = "none";
           subSelect.innerHTML = "";
         }
         const reactBtn = document.getElementById("reactivate-link-btn");
-        if (reactBtn) reactBtn.style.display = "none";
+        if (reactBtn) {
+          reactBtn.style.display = "none";
+          reactBtn.disabled = false;
+          reactBtn.innerHTML = `<i class="fa-solid fa-bolt" style="color:#fff"></i> Reactivate`;
+        }
+        const limitContainer = document.getElementById("reactivate-link-limit-container");
+        if (limitContainer) limitContainer.style.display = "none";
         const reactMsg = document.getElementById("reactivate-link-msg");
         if (reactMsg) reactMsg.innerHTML = "";
         const searchContainer = document.getElementById("link-search-container");

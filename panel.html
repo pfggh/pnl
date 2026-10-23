@@ -204,13 +204,80 @@
         <div id="reactivate-link-modal-template" style="display:none">
           <h3 id="link-reactivate-title"><i class="fa-solid fa-link" style="color:#10b981"></i> Reactivate Link</h3>
           <p id="link-reactivate-sub-title" style="color:var(--text-muted); font-size:0.85rem; margin-bottom:15px;">Search by phone or link to reactivate a link.</p>
+          
+          <!-- Search Row -->
           <div id="link-search-container" style="display:flex; gap:10px; margin-bottom:15px;">
             <input type="text" id="reactivate-link-input" placeholder="Enter phone or link..." style="flex:1" />
             <button id="reactivate-link-search-btn" class="pill-btn" style="background:#10b981; padding:10px 20px;"><i class="fa-solid fa-magnifying-glass" style="color:#fff"></i> Search</button>
           </div>
-          <select id="reactivate-link-sub-select" style="display:none; width:100%; margin-bottom:15px;"></select>
+
+          <!-- Subscription Selection Container -->
+          <div id="reactivate-link-select-container" style="display:none; margin-bottom:15px;">
+            <label id="reactivate-link-select-label" style="display:block; font-size:0.82rem; color:var(--text-muted); margin-bottom:6px; font-weight:600;">Select Subscription:</label>
+            <select id="reactivate-link-sub-select" style="width:100%; margin-bottom:0;"></select>
+          </div>
+
+          <!-- Standard Reactivate Button -->
           <button id="reactivate-link-btn" class="pill-btn" style="display:none; width:100%; background:#10b981; justify-content:center;"><i class="fa-solid fa-bolt" style="color:#fff"></i> Reactivate</button>
+
+          <!-- 2-Device Limit Confirmation Container -->
+          <div id="reactivate-link-limit-container" style="display:none; margin-top:15px; background:rgba(245, 158, 11, 0.08); border:1px solid rgba(245, 158, 11, 0.35); border-radius:14px; padding:18px;">
+            <div style="display:flex; align-items:center; gap:10px; color:#f59e0b; font-weight:700; margin-bottom:10px; font-size:0.95rem;">
+              <i class="fa-solid fa-triangle-exclamation"></i> Device Limit Reached
+            </div>
+            <p id="reactivate-link-limit-prompt" style="color:#fcd34d; font-size:0.9rem; margin-bottom:14px; line-height:1.45;">
+              user has reached 2 devices limit. Are you sure u want to reactivate?
+            </p>
+            <div id="reactivate-link-devices-list" style="display:none; margin-bottom:14px; background:rgba(0, 0, 0, 0.25); border-radius:10px; padding:10px; font-size:0.82rem; color:#cbd5e1;"></div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <button id="reactivate-link-force-btn" class="pill-btn" style="width:100%; background:rgba(245, 158, 11, 0.2); border-color:#f59e0b; color:#fbbf24; justify-content:center;">
+                <i class="fa-solid fa-bolt" style="color:#fbbf24;"></i> Reactivate Link
+              </button>
+              <button id="reactivate-link-logout-btn" class="pill-btn" style="width:100%; background:#ef4444; border-color:#ef4444; color:#fff; justify-content:center;">
+                <i class="fa-solid fa-arrow-right-from-bracket" style="color:#fff;"></i> Logout this user's devices
+              </button>
+              <button id="reactivate-link-back-btn" class="pill-btn" style="width:100%; background:transparent; border-color:var(--border); color:var(--text-muted); justify-content:center; font-size:0.78rem; padding:8px 12px;">
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <!-- Message and Success Display -->
           <div id="reactivate-link-msg" style="margin-top:15px; text-align:center;"></div>
+        </div>
+
+        <!-- Add Token Modal Template -->
+        <div id="add-token-modal-template" style="display:none">
+          <h3 style="margin-bottom:8px;"><i class="fa-solid fa-key" style="color:#10b981;"></i> Add / Update ChatGPT Token</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:15px;">
+            Paste raw token/session JSON, accessToken JWT, or session token. Intelligent extraction saves both raw payload and processed tokens.
+          </p>
+
+          <div style="margin-bottom:12px;">
+            <label style="display:block; font-size:0.82rem; color:var(--text-muted); margin-bottom:4px; font-weight:600;">Target Account Email (optional if included in token payload):</label>
+            <input type="email" id="token-modal-email" placeholder="e.g. gptleb.yyd@teshrij.com (auto-detected if present in JSON/JWT)" style="width:100%;" />
+          </div>
+
+          <div style="margin-bottom:15px;">
+            <label style="display:block; font-size:0.82rem; color:var(--text-muted); margin-bottom:4px; font-weight:600;">Raw Token / Session Payload:</label>
+            <textarea id="token-modal-raw" placeholder="Paste JSON with accessToken, sessionToken, cookies, or raw JWT..." style="width:100%; height:160px; padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; color:#fff; font-family:monospace; font-size:0.8rem; resize:vertical;"></textarea>
+          </div>
+
+          <!-- Preview & Diagnostic Area -->
+          <div id="token-modal-preview" style="display:none; margin-bottom:15px; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.3); border-radius:10px; padding:12px; font-size:0.82rem;">
+            <div style="color:#34d399; font-weight:600; margin-bottom:6px;"><i class="fa-solid fa-circle-check"></i> Intelligent Parse Preview</div>
+            <div id="token-preview-details" style="color:var(--text-muted); line-height:1.4;"></div>
+          </div>
+
+          <div style="display:flex; gap:10px;">
+            <button id="save-token-submit-btn" class="pill-btn" style="flex:1; background:#10b981; border-color:#10b981; color:#fff; justify-content:center;">
+              <i class="fa-solid fa-floppy-disk" style="color:#fff;"></i> Save Token
+            </button>
+            <button id="close-token-modal-btn" class="pill-btn" style="background:transparent; border-color:var(--border); color:var(--text-muted);">
+              Cancel
+            </button>
+          </div>
+          <div id="token-modal-msg" style="margin-top:12px; text-align:center; font-size:0.85rem;"></div>
         </div>
 
         <div id="replace-gpt-teshrijxyz-modal-template" style="display:none">
@@ -301,13 +368,17 @@
         <h2 class="section-title">Views</h2>
         <div class="select-container"
           style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
-          <select id="accounts-view-selector" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+          <select id="accounts-view-selector" style="flex: 1; min-width: 220px; margin-bottom: 0;">
+            <option value="custom_domain_accounts" selected>Custom Domain Accounts (Emails, Passwords & 2FA)</option>
+            <option value="accs">All Netflix Accounts</option>
             <option value="fetchissues">All Issues</option>
             <option value="fetchunfixed">Unsolved Issues</option>
-            <option value="accs" selected>All Accounts</option>
           </select>
-          <input type="text" id="acc-table-search" placeholder="Search accounts/issues..."
+          <input type="text" id="acc-table-search" placeholder="Search accounts/issues/domains..."
             style="flex: 2; min-width: 250px; margin: 0;" />
+          <button id="open-token-modal-btn" class="pill-btn" style="background: #10b981; border-color: #10b981; color: #fff; padding: 10px 18px;">
+            <i class="fa-solid fa-key" style="color:#fff;"></i> Add Token
+          </button>
         </div>
         <h2 class="section-title" id="accounts-issues-title">Current View</h2>
         <div class="table-container">
