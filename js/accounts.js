@@ -190,6 +190,9 @@ window.Accounts = (() => {
     }
   }
 
+  // Map tracking buttons currently in "showing time left" active state: rowId -> secret
+  const activeCopiedButtons = new Map();
+
   function startTotpTicker() {
     stopTotpTicker();
     const updateAllCodes = async () => {
@@ -207,11 +210,21 @@ window.Accounts = (() => {
 
       for (const item of activeTotpGenerators) {
         const el = document.getElementById(item.id);
+        const copyBtn = document.getElementById(`copy-${item.id}`);
+        const code = await computeCode(item.secret);
+
         if (el) {
-          const code = await computeCode(item.secret);
           el.textContent = code;
-          const copyBtn = document.getElementById(`copy-${item.id}`);
-          if (copyBtn) copyBtn.dataset.code = code;
+        }
+        if (copyBtn) {
+          copyBtn.dataset.code = code;
+          // If this button was clicked and is in "time left" countdown mode:
+          if (activeCopiedButtons.has(item.id)) {
+            copyBtn.innerHTML = `<i class="fa-solid fa-clock" style="color:#f59e0b;"></i> ${secsLeft}s left`;
+            copyBtn.style.background = secsLeft <= 5 ? "rgba(239, 68, 68, 0.2)" : "rgba(245, 158, 11, 0.2)";
+            copyBtn.style.borderColor = secsLeft <= 5 ? "#ef4444" : "#f59e0b";
+            copyBtn.style.color = secsLeft <= 5 ? "#ef4444" : "#fbbf24";
+          }
         }
       }
     };
@@ -687,8 +700,8 @@ window.Accounts = (() => {
               codeDisplay = `
                 <div style="display:flex; align-items:center; gap:8px;">
                   <span id="${rowId}" style="font-family:monospace; font-size:1.05rem; font-weight:700; color:#38bdf8; letter-spacing:1px;">...</span>
-                  <button id="copy-${rowId}" class="copy-totp-btn pill-btn" data-code="" style="padding:4px 8px; font-size:0.75rem; background:rgba(56, 189, 248, 0.15); border-color:rgba(56, 189, 248, 0.4); color:#38bdf8;">
-                    <i class="fa-solid fa-copy"></i>
+                  <button id="copy-${rowId}" class="copy-totp-btn pill-btn" data-row-id="${rowId}" data-secret="${key}" data-code="" style="padding:5px 10px; font-size:0.75rem; background:rgba(56, 189, 248, 0.15); border-color:rgba(56, 189, 248, 0.4); color:#38bdf8; display:inline-flex; align-items:center; gap:5px; transition:all 0.2s ease;">
+                    <i class="fa-regular fa-copy"></i> Copy Code
                   </button>
                 </div>
               `;
@@ -916,10 +929,42 @@ window.Accounts = (() => {
             btn.textContent = oldText;
           }
         } else if (btn.classList.contains("copy-totp-btn")) {
-          const code = btn.dataset.code;
+          const rowId = btn.dataset.rowId;
+          const secret = btn.dataset.secret;
+          let code = btn.dataset.code;
+
+          // If code is not computed yet, compute it immediately
+          if (!code || code === "..." || code === "—") {
+            code = await computeCode(secret);
+            btn.dataset.code = code;
+            const spanEl = document.getElementById(rowId);
+            if (spanEl) spanEl.textContent = code;
+          }
+
           if (code && code !== "—") {
-            navigator.clipboard.writeText(code);
-            showMessageAccs(`Copied code ${code}!`, "success");
+            await navigator.clipboard.writeText(code);
+            showMessageAccs(`Copied verification code ${code}!`, "success");
+
+            // Calculate initial time left
+            const epoch = Math.floor(Date.now() / 1000);
+            const secsLeft = 30 - (epoch % 30);
+
+            // Set to countdown display immediately
+            activeCopiedButtons.set(rowId, secret);
+            btn.innerHTML = `<i class="fa-solid fa-clock" style="color:#f59e0b;"></i> ${secsLeft}s left`;
+            btn.style.background = secsLeft <= 5 ? "rgba(239, 68, 68, 0.2)" : "rgba(245, 158, 11, 0.2)";
+            btn.style.borderColor = secsLeft <= 5 ? "#ef4444" : "#f59e0b";
+            btn.style.color = secsLeft <= 5 ? "#ef4444" : "#fbbf24";
+
+            // Revert back to "Copy Code" button after 10 seconds or when countdown finishes
+            if (btn._revertTimeout) clearTimeout(btn._revertTimeout);
+            btn._revertTimeout = setTimeout(() => {
+              activeCopiedButtons.delete(rowId);
+              btn.innerHTML = `<i class="fa-regular fa-copy"></i> Copy Code`;
+              btn.style.background = "rgba(56, 189, 248, 0.15)";
+              btn.style.borderColor = "rgba(56, 189, 248, 0.4)";
+              btn.style.color = "#38bdf8";
+            }, 10000);
           }
         } else if (btn.classList.contains("add-token-row-btn")) {
           const email = btn.dataset.email;
