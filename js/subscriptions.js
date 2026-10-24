@@ -1382,7 +1382,7 @@ window.Subscriptions = (() => {
           const subTitle = document.getElementById("link-reactivate-sub-title");
           if (subTitle) subTitle.style.display = "none";
 
-          const linkUrl = result.secret_id ? `https://portal.teshrij.com/?id=${result.secret_id}` : (result.link || "");
+          const linkUrl = result.link || (result.secret_id ? `https://teshrij.xyz/?id=${result.secret_id}` : "");
           const linkCopySection = linkUrl ? `
             <div style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(16, 185, 129, 0.3); display:flex; justify-content:space-between; align-items:center;">
               <span style="font-size:0.8rem; color:#6ee7b7; word-break:break-all;">Link: <code style="background:rgba(0,0,0,0.3); padding:2px 6px; border-radius:4px;">${linkUrl}</code></span>
