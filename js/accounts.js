@@ -794,10 +794,10 @@ window.Accounts = (() => {
             const [accsRes, tokensRes] = await Promise.all([
               window.supabaseClient
                 .from("accounts")
-                .select("id, email, password, two_factor_key, last_link"),
+                .select("id, email, password, two_factor_key, last_link, token_skipped"),
               window.supabaseClient
                 .from("gpt_account_tokens")
-                .select("email, access_token_exp, status, updated_at")
+                .select("email, access_token_exp, status, updated_at, skipped")
             ]);
 
             if (accsRes.data && accsRes.data.length > 0) {
@@ -856,11 +856,11 @@ window.Accounts = (() => {
         accountsIssuesTable.classList.add("accounts-table");
         accountsIssuesTableHead.innerHTML = `
           <tr>
-            <th style="width: 28%;">Account <button class="sort-btn" data-column="0">↕️</button></th>
-            <th style="width: 22%;">Password <button class="sort-btn" data-column="1">↕️</button></th>
-            <th style="width: 26%;">Verification Code (2FA) <button class="sort-btn" data-column="2">↕️</button></th>
-            <th style="width: 12%;">Token Status <button class="sort-btn" data-column="3">↕️</button></th>
-            <th style="width: 12%; text-align: right;">Token</th>
+            <th style="width: 24%;">Account <button class="sort-btn" data-column="0">↕️</button></th>
+            <th style="width: 18%;">Password <button class="sort-btn" data-column="1">↕️</button></th>
+            <th style="width: 24%;">Verification Code (2FA) <button class="sort-btn" data-column="2">↕️</button></th>
+            <th style="width: 14%;">Token Status <button class="sort-btn" data-column="3">↕️</button></th>
+            <th style="width: 20%; text-align: right;">Actions</th>
           </tr>`;
 
         if (customDomainAccounts.length === 0) {
@@ -952,14 +952,14 @@ window.Accounts = (() => {
               <td data-label="Token Status">
                 ${tokenStatusBadge}
               </td>
-              <td data-label="Action" style="text-align: right;">
+              <td data-label="Actions" style="text-align: right; white-space: nowrap;">
                 <div style="display:inline-flex; align-items:center; gap:8px; justify-content:flex-end;">
                   <button class="btn-row-token add-token-row-btn" data-email="${safeEm}" title="Add/Update Token">
                     <i class="fa-solid fa-key" style="color:#10b981;"></i> Update
                   </button>
                   ${!isSkipped ? `
                   <button class="btn-table-action btn-hold-skip skip-acc-token-btn" data-email="${safeEm}" title="Hold to Skip">
-                    <i class="fa-solid fa-forward"></i> Skip
+                    <i class="fa-solid fa-forward"></i> Hold to Skip
                   </button>` : ''}
                 </div>
               </td>

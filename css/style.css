@@ -399,7 +399,8 @@ select:focus {
   backdrop-filter: blur(20px);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   margin-top: 20px;
 }
 
