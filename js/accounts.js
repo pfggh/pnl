@@ -27,6 +27,126 @@ window.Accounts = (() => {
 
   // Track accounts where the user clicked to reveal 2FA:
   // Map of rowId -> { secret, cellId, codeSpanId, ringProgressId, ringTextId, btnCopyId, lastPeriod }
+    const bindHoldToSkip = (button, onConfirm) => {
+    let t = null;
+    let elapsed = 0;
+    const total = 1200; // 1.2s hold
+    const stepMs = 50;
+
+    let progress = button.querySelector(".hold-progress");
+    if (!progress) {
+      progress = document.createElement("span");
+      progress.className = "hold-progress";
+      button.appendChild(progress);
+    }
+
+    const start = (e) => {
+      if (e) e.preventDefault();
+      if (t) return;
+      button.classList.add("holding");
+      t = setInterval(() => {
+        elapsed += stepMs;
+        const pct = Math.min(100, (elapsed / total) * 100);
+        progress.style.width = pct + "%";
+        if (elapsed >= total) {
+          clearInterval(t);
+          t = null;
+          progress.style.width = "0%";
+          button.classList.remove("holding");
+          elapsed = 0;
+          onConfirm();
+        }
+      }, stepMs);
+    };
+
+    const stop = () => {
+      if (t) {
+        clearInterval(t);
+        t = null;
+      }
+      progress.style.width = "0%";
+      button.classList.remove("holding");
+      elapsed = 0;
+    };
+
+    button.addEventListener("mousedown", start);
+    button.addEventListener("mouseup", stop);
+    button.addEventListener("mouseleave", stop);
+    button.addEventListener("touchstart", start, { passive: false });
+    button.addEventListener("touchend", stop);
+    button.addEventListener("touchcancel", stop);
+  };
+
+  const skipAccountToken = async (email, buttonElement = null) => {
+    try {
+      showSpinnerAccs(true);
+      const cleanEmail = (email || "").trim().toLowerCase();
+      if (!cleanEmail) return;
+
+      let success = false;
+      if (window.supabaseClient) {
+        try {
+          const { error: err1 } = await window.supabaseClient
+            .from("gpt_account_tokens")
+            .upsert({
+              email: cleanEmail,
+              status: "skipped",
+              skipped: true,
+              updated_at: new Date().toISOString()
+            }, { onConflict: "email" });
+
+          const { error: err2 } = await window.supabaseClient
+            .from("accounts")
+            .update({ token_skipped: true })
+            .eq("email", cleanEmail);
+
+          if (!err1 && !err2) success = true;
+        } catch (e) {
+          console.warn("Direct DB skip failed, trying function fallback:", e);
+        }
+      }
+
+      if (!success) {
+        const token = await getAuthToken();
+        const res = await fetch(`${window.SUPABASE_URL}/functions/v1/save_gpt_token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ action: "skip", email: cleanEmail })
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || j.error) throw new Error(j.error || "Failed to skip token");
+        success = true;
+      }
+
+      showMessageAccs(`Account ${cleanEmail} token skipped.`, "success");
+
+      // Update UI row instantly without full reload
+      if (buttonElement) {
+        const tr = buttonElement.closest("tr");
+        if (tr) {
+          const statusCell = tr.querySelector('[data-label="Token Status"]');
+          if (statusCell) {
+            statusCell.innerHTML = `
+              <span class="status-pill skipped">
+                <i class="fa-solid fa-forward"></i> Skipped
+              </span>`;
+          }
+          buttonElement.remove();
+        }
+      } else {
+        fetchAccountsOrIssues(accountsViewSelector?.value || "custom_domain_accounts");
+      }
+    } catch (err) {
+      console.error("skipAccountToken error:", err);
+      showMessageAccs(`Error skipping token: ${err.message}`, "error");
+    } finally {
+      showSpinnerAccs(false);
+    }
+  };
+
   const activeRevealed2FA = new Map();
   let totpTickerInterval = null;
   let currentCustomDomainAccounts = [];
@@ -757,7 +877,14 @@ window.Accounts = (() => {
 
             let tokenStatusBadge = "";
             let t = row.has_token ? row : tokenMap.get(em.toLowerCase());
-            if (t) {
+            const isSkipped = row.token_skipped || t?.skipped || t?.status === "skipped";
+
+            if (isSkipped) {
+              tokenStatusBadge = `
+                <span class="status-pill skipped">
+                  <i class="fa-solid fa-forward"></i> Skipped
+                </span>`;
+            } else if (t && (t.status === "active" || t.token_exp || t.access_token_exp)) {
               const exp = t.token_exp || t.access_token_exp;
               let expInfo = "";
               if (exp) {
@@ -826,12 +953,26 @@ window.Accounts = (() => {
                 ${tokenStatusBadge}
               </td>
               <td data-label="Action" style="text-align: right;">
-                <button class="btn-row-token add-token-row-btn" data-email="${safeEm}" title="Add/Update Token">
-                  <i class="fa-solid fa-key" style="color:#10b981;"></i> Update
-                </button>
+                <div style="display:inline-flex; align-items:center; gap:8px; justify-content:flex-end;">
+                  <button class="btn-row-token add-token-row-btn" data-email="${safeEm}" title="Add/Update Token">
+                    <i class="fa-solid fa-key" style="color:#10b981;"></i> Update
+                  </button>
+                  ${!isSkipped ? `
+                  <button class="btn-table-action btn-hold-skip skip-acc-token-btn" data-email="${safeEm}" title="Hold to Skip">
+                    <i class="fa-solid fa-forward"></i> Skip
+                  </button>` : ''}
+                </div>
               </td>
             `;
             accountsIssuesTableBody.appendChild(tr);
+          });
+
+          // Bind hold-to-skip for all skip token buttons
+          accountsIssuesTableBody.querySelectorAll(".skip-acc-token-btn").forEach(btn => {
+            bindHoldToSkip(btn, () => {
+              const email = btn.dataset.email;
+              skipAccountToken(email, btn);
+            });
           });
         }
 

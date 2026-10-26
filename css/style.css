@@ -1584,6 +1584,13 @@ tr.ang-row-expired td:first-child {
   color: #10b981;
 }
 
+
+.status-pill.skipped {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #fde68a;
+}
+
 .status-pill.missing {
   background: rgba(239, 68, 68, 0.12);
   border: 1px solid rgba(239, 68, 68, 0.25);
