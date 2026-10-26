@@ -1003,7 +1003,9 @@ window.Subscriptions = (() => {
 
           subSelect.innerHTML = lastSubList.map((s, idx) => {
             const exp = s.expiry ? formatCompactDate(s.expiry) : "No expiry";
-            return `<option value="${idx}">${s.accemail} (Exp: ${exp})</option>`;
+            const expiredTag = (s.is_active === false || s.is_expired) ? " [EXPIRED]" : "";
+            const subIdPrefix = (s.sub_id || s.id) ? `#${s.sub_id || s.id} — ` : "";
+            return `<option value="${idx}">${subIdPrefix}${s.accemail} (Exp: ${exp})${expiredTag}</option>`;
           }).join("");
 
           subSelect.style.display = "inline-block";
@@ -1043,7 +1045,12 @@ window.Subscriptions = (() => {
 
           if (!res.ok) {
             const errorText = await res.text();
-            throw new Error(errorText || `HTTP Error ${res.status}`);
+            let parsedError = errorText;
+            try {
+              const errObj = JSON.parse(errorText);
+              if (errObj && errObj.error) parsedError = errObj.error;
+            } catch (_) {}
+            throw new Error(parsedError || `HTTP Error ${res.status}`);
           }
 
           const result = await res.json();
@@ -1232,15 +1239,18 @@ window.Subscriptions = (() => {
 
           // Build select options with full contextual details
           subSelect.innerHTML = lastMatchList.map((m, idx) => {
+            const expiredTag = (m.is_active === false || m.is_expired) ? " [EXPIRED]" : "";
             if (currentSearchType === "phone") {
               const subIdPrefix = m.sub_id ? `#${m.sub_id} — ` : "";
               const exp = m.expiry ? formatCompactDate(m.expiry) : "No expiry";
               const legacyTag = (!m.secret_id || m.is_legacy) ? " [Legacy]" : "";
               const devTag = (m.device_count !== undefined && m.device_count !== null) ? ` (${m.device_count} dev)` : "";
-              return `<option value="${idx}">${subIdPrefix}${m.accemail || m.email || "Subscription"} (Exp: ${exp})${legacyTag}${devTag}</option>`;
+              return `<option value="${idx}">${subIdPrefix}${m.accemail || m.email || "Subscription"} (Exp: ${exp})${expiredTag}${legacyTag}${devTag}</option>`;
             } else {
+              const subIdPrefix = m.sub_id ? `#${m.sub_id} — ` : "";
               const added = m.last_link ? formatCompactDate(m.last_link) : "N/A";
-              return `<option value="${idx}">Email: ${m.email || m.accemail} (Last Link: ${added})</option>`;
+              const exp = m.expiry ? ` | Exp: ${formatCompactDate(m.expiry)}` : "";
+              return `<option value="${idx}">${subIdPrefix}Email: ${m.email || m.accemail}${exp} (Last Link: ${added})${expiredTag}</option>`;
             }
           }).join("");
 

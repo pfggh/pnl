@@ -25,6 +25,188 @@ window.Accounts = (() => {
   const cancelModal = document.getElementById("cancel-modal");
   const modalContent = document.getElementById("modal-content");
 
+  const bindHoldToSkip = (button, onConfirm) => {
+    let t = null;
+    let elapsed = 0;
+    const total = 1200; // 1.2s hold
+    const stepMs = 50;
+
+    let progress = button.querySelector(".hold-progress");
+    if (!progress) {
+      progress = document.createElement("span");
+      progress.className = "hold-progress";
+      button.appendChild(progress);
+    }
+
+    const start = (e) => {
+      if (e) e.preventDefault();
+      if (t) return;
+      button.classList.add("holding");
+      t = setInterval(() => {
+        elapsed += stepMs;
+        const pct = Math.min(100, (elapsed / total) * 100);
+        progress.style.width = pct + "%";
+        if (elapsed >= total) {
+          clearInterval(t);
+          t = null;
+          progress.style.width = "0%";
+          button.classList.remove("holding");
+          elapsed = 0;
+          onConfirm();
+        }
+      }, stepMs);
+    };
+
+    const stop = () => {
+      if (t) {
+        clearInterval(t);
+        t = null;
+      }
+      progress.style.width = "0%";
+      button.classList.remove("holding");
+      elapsed = 0;
+    };
+
+    button.addEventListener("mousedown", start);
+    button.addEventListener("mouseup", stop);
+    button.addEventListener("mouseleave", stop);
+    button.addEventListener("touchstart", start, { passive: false });
+    button.addEventListener("touchend", stop);
+    button.addEventListener("touchcancel", stop);
+  };
+
+  const skipAccountToken = async (email, buttonElement = null) => {
+    try {
+      showSpinnerAccs(true);
+      const cleanEmail = (email || "").trim().toLowerCase();
+      if (!cleanEmail) return;
+
+      let success = false;
+      if (window.supabaseClient) {
+        try {
+          const { error: err1 } = await window.supabaseClient
+            .from("gpt_account_tokens")
+            .upsert({
+              email: cleanEmail,
+              status: "hidden",
+              skipped: true,
+              hidden: true,
+              updated_at: new Date().toISOString()
+            }, { onConflict: "email" });
+
+          const { error: err2 } = await window.supabaseClient
+            .from("accounts")
+            .update({ token_skipped: true, hidden: true, tag: "hidden" })
+            .eq("email", cleanEmail);
+
+          if (!err1 && !err2) success = true;
+        } catch (e) {
+          console.warn("Direct DB skip failed, trying function fallback:", e);
+        }
+      }
+
+      if (!success) {
+        const token = await getAuthToken();
+        const res = await fetch(`${window.SUPABASE_URL}/functions/v1/save_gpt_token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ action: "skip", email: cleanEmail })
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || j.error) throw new Error(j.error || "Failed to skip token");
+        success = true;
+      }
+
+      showMessageAccs(`Account ${cleanEmail} tagged as hidden.`, "success");
+
+      // Instantly remove row from view with smooth slide/fade
+      if (buttonElement) {
+        const tr = buttonElement.closest("tr");
+        if (tr) {
+          tr.style.transition = "all 0.25s ease";
+          tr.style.opacity = "0";
+          tr.style.transform = "translateX(20px)";
+          setTimeout(() => {
+            tr.remove();
+            if (accountsIssuesTableBody && accountsIssuesTableBody.querySelectorAll("tr").length === 0) {
+              accountsIssuesTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.92rem;"><i class="fa-solid fa-inbox" style="font-size:1.8rem; display:block; margin-bottom:10px; opacity:0.5;"></i>No accounts in this view.</td></tr>`;
+            }
+          }, 250);
+        }
+      } else {
+        fetchAccountsOrIssues(accountsViewSelector?.value || "custom_domain_accounts");
+      }
+    } catch (err) {
+      console.error("skipAccountToken error:", err);
+      showMessageAccs(`Error skipping account: ${err.message}`, "error");
+    } finally {
+      showSpinnerAccs(false);
+    }
+  };
+
+  const unhideAccount = async (email, buttonElement = null) => {
+    try {
+      showSpinnerAccs(true);
+      const cleanEmail = (email || "").trim().toLowerCase();
+      if (!cleanEmail) return;
+
+      let success = false;
+      if (window.supabaseClient) {
+        try {
+          const { error: err1 } = await window.supabaseClient
+            .from("gpt_account_tokens")
+            .update({ status: "active", skipped: false, hidden: false })
+            .eq("email", cleanEmail);
+
+          const { error: err2 } = await window.supabaseClient
+            .from("accounts")
+            .update({ token_skipped: false, hidden: false, tag: null })
+            .eq("email", cleanEmail);
+
+          if (!err1 && !err2) success = true;
+        } catch (e) {
+          console.warn("Direct DB unhide failed, trying function fallback:", e);
+        }
+      }
+
+      if (!success) {
+        const token = await getAuthToken();
+        const res = await fetch(`${window.SUPABASE_URL}/functions/v1/save_gpt_token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ action: "unhide", email: cleanEmail })
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || j.error) throw new Error(j.error || "Failed to unhide account");
+        success = true;
+      }
+
+      showMessageAccs(`Account ${cleanEmail} restored to active list.`, "success");
+
+      if (buttonElement) {
+        const tr = buttonElement.closest("tr");
+        if (tr) {
+          tr.style.transition = "all 0.25s ease";
+          tr.style.opacity = "0";
+          setTimeout(() => tr.remove(), 250);
+        }
+      } else {
+        fetchAccountsOrIssues(accountsViewSelector?.value || "hidden_accounts");
+      }
+    } catch (err) {
+      console.error("unhideAccount error:", err);
+      showMessageAccs(`Error restoring account: ${err.message}`, "error");
+    } finally {
+      showSpinnerAccs(false);
+    }
+  };
+
   // Track accounts where the user clicked to reveal 2FA:
   // Map of rowId -> { secret, cellId, codeSpanId, ringProgressId, ringTextId, btnCopyId, lastPeriod }
   const activeRevealed2FA = new Map();
@@ -626,13 +808,11 @@ window.Accounts = (() => {
     try {
       const token = await getAuthToken();
 
-      if (action === "custom_domain_accounts") {
-        accountsIssuesTitle.innerHTML = `
-          <span>Custom Domain Accounts</span>
-          <span style="font-size:0.82rem; font-weight:normal; color:var(--text-muted); margin-left:12px;">
-            Click to calculate & copy verification code (<strong class="totp-countdown-global" style="color:#10b981;">30s</strong> cycle)
-          </span>
-        `;
+      if (action === "custom_domain_accounts" || action === "hidden_accounts") {
+        const isHiddenView = action === "hidden_accounts";
+        accountsIssuesTitle.innerHTML = isHiddenView
+          ? `<span>Hidden Accounts (Skipped)</span><span style="font-size:0.82rem; font-weight:normal; color:var(--text-muted); margin-left:12px;">Accounts tagged as hidden. Click Restore to unhide.</span>`
+          : `<span>Custom Domain Accounts</span><span style="font-size:0.82rem; font-weight:normal; color:var(--text-muted); margin-left:12px;">Click to calculate & copy verification code (<strong class="totp-countdown-global" style="color:#10b981;">30s</strong> cycle)</span>`;
 
         let accs = [];
         let tokenMap = new Map();
@@ -643,10 +823,10 @@ window.Accounts = (() => {
             const [accsRes, tokensRes] = await Promise.all([
               window.supabaseClient
                 .from("accounts")
-                .select("id, email, password, two_factor_key, last_link"),
+                .select("id, email, password, two_factor_key, last_link, token_skipped, hidden, tag"),
               window.supabaseClient
                 .from("gpt_account_tokens")
-                .select("email, access_token_exp, status, updated_at")
+                .select("email, access_token_exp, status, updated_at, skipped, hidden")
             ]);
 
             if (accsRes.data && accsRes.data.length > 0) {
@@ -668,7 +848,7 @@ window.Accounts = (() => {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${token}`
             },
-            body: JSON.stringify({ action: "custom_domain_accounts" })
+            body: JSON.stringify({ action })
           });
           const json = await response.json();
           if (json.error) throw new Error(json.error);
@@ -691,7 +871,12 @@ window.Accounts = (() => {
           const em = (item.email || "").trim().toLowerCase();
           if (!em.includes("@")) return false;
           const domain = em.split("@").pop().trim();
-          return domain && !normalProviders.has(domain);
+          if (!domain || normalProviders.has(domain)) return false;
+
+          const t = tokenMap.get(em);
+          const isHidden = item.hidden === true || item.token_skipped === true || item.tag === "hidden" ||
+                           t?.skipped === true || t?.hidden === true || t?.status === "hidden" || t?.status === "skipped";
+          return isHiddenView ? isHidden : !isHidden;
         });
 
         customDomainAccounts.sort((a, b) => {
@@ -704,11 +889,11 @@ window.Accounts = (() => {
         accountsIssuesTable.classList.add("accounts-table");
         accountsIssuesTableHead.innerHTML = `
           <tr>
-            <th style="width: 28%;">Account <button class="sort-btn" data-column="0">↕️</button></th>
-            <th style="width: 22%;">Password <button class="sort-btn" data-column="1">↕️</button></th>
-            <th style="width: 26%;">Verification Code (2FA) <button class="sort-btn" data-column="2">↕️</button></th>
-            <th style="width: 12%;">Token Status <button class="sort-btn" data-column="3">↕️</button></th>
-            <th style="width: 12%; text-align: right;">Token</th>
+            <th style="width: 24%;">Account <button class="sort-btn" data-column="0">↕️</button></th>
+            <th style="width: 18%;">Password <button class="sort-btn" data-column="1">↕️</button></th>
+            <th style="width: 24%;">Verification Code (2FA) <button class="sort-btn" data-column="2">↕️</button></th>
+            <th style="width: 14%;">Token Status <button class="sort-btn" data-column="3">↕️</button></th>
+            <th style="width: 20%; text-align: right;">Actions</th>
           </tr>`;
 
         if (customDomainAccounts.length === 0) {
@@ -793,13 +978,38 @@ window.Accounts = (() => {
               <td data-label="Token Status">
                 ${tokenStatusBadge}
               </td>
-              <td data-label="Action" style="text-align: right;">
-                <button class="btn-row-token add-token-row-btn" data-email="${safeEm}" title="Add/Update Token">
-                  <i class="fa-solid fa-key" style="color:#10b981;"></i> Update
-                </button>
+              <td data-label="Actions" style="text-align: right; white-space: nowrap;">
+                <div style="display:inline-flex; align-items:center; gap:8px; justify-content:flex-end;">
+                  <button class="btn-row-token add-token-row-btn" data-email="${safeEm}" title="Add/Update Token">
+                    <i class="fa-solid fa-key" style="color:#10b981;"></i> Update
+                  </button>
+                  ${!isHiddenView ? `
+                  <button class="btn-table-action btn-hold-skip skip-acc-token-btn" data-email="${safeEm}" title="Hold to Skip (Adds hidden tag)">
+                    <i class="fa-solid fa-forward"></i> Hold to Skip
+                  </button>` : `
+                  <button class="btn-table-action unhide-acc-btn" data-email="${safeEm}" style="background:rgba(99,102,241,0.12); border-color:rgba(99,102,241,0.3); color:#a5b4fc;" title="Restore Account">
+                    <i class="fa-solid fa-rotate-left"></i> Restore
+                  </button>`}
+                </div>
               </td>
             `;
             accountsIssuesTableBody.appendChild(tr);
+          });
+
+          // Bind hold-to-skip for active skip buttons
+          accountsIssuesTableBody.querySelectorAll(".skip-acc-token-btn").forEach(btn => {
+            bindHoldToSkip(btn, () => {
+              const email = btn.dataset.email;
+              skipAccountToken(email, btn);
+            });
+          });
+
+          // Bind restore buttons for hidden accounts view
+          accountsIssuesTableBody.querySelectorAll(".unhide-acc-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+              const email = btn.dataset.email;
+              unhideAccount(email, btn);
+            });
           });
         }
 
