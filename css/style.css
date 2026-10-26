@@ -399,8 +399,7 @@ select:focus {
   backdrop-filter: blur(20px);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   margin-top: 20px;
 }
 
@@ -1583,13 +1582,6 @@ tr.ang-row-expired td:first-child {
   background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.3);
   color: #10b981;
-}
-
-
-.status-pill.skipped {
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  color: #fde68a;
 }
 
 .status-pill.missing {
