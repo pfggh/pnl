@@ -29,6 +29,7 @@ window.Accounts = (() => {
   // Map of rowId -> { secret, cellId, codeSpanId, ringProgressId, ringTextId, btnCopyId, lastPeriod }
   const activeRevealed2FA = new Map();
   let totpTickerInterval = null;
+  let currentCustomDomainAccounts = [];
 
   const filterAccountsTable = () => {
     if (!accTableSearch) return;
@@ -478,6 +479,7 @@ window.Accounts = (() => {
     const previewDiv = modalContent.querySelector("#token-modal-preview");
     const previewDetails = modalContent.querySelector("#token-preview-details");
     const saveBtn = modalContent.querySelector("#save-token-submit-btn");
+    const skipBtn = modalContent.querySelector("#skip-token-modal-btn");
     const cancelBtn = modalContent.querySelector("#close-token-modal-btn");
     const msgDiv = modalContent.querySelector("#token-modal-msg");
 
@@ -522,6 +524,35 @@ window.Accounts = (() => {
     if (cancelBtn) {
       cancelBtn.onclick = () => {
         cancelModal.style.display = "none";
+      };
+    }
+
+    if (skipBtn) {
+      skipBtn.onclick = () => {
+        const currentEmail = (emailInput?.value || "").trim().toLowerCase();
+        let nextEmail = "";
+
+        if (currentEmail && currentCustomDomainAccounts && currentCustomDomainAccounts.length > 0) {
+          const currentIndex = currentCustomDomainAccounts.findIndex(acc => (acc.email || "").trim().toLowerCase() === currentEmail);
+          if (currentIndex !== -1 && currentIndex + 1 < currentCustomDomainAccounts.length) {
+            nextEmail = (currentCustomDomainAccounts[currentIndex + 1].email || "").trim();
+          } else if (currentIndex === -1 && currentCustomDomainAccounts.length > 0) {
+            nextEmail = (currentCustomDomainAccounts[0].email || "").trim();
+          }
+        }
+
+        if (nextEmail) {
+          emailInput.value = nextEmail;
+          if (rawInput) rawInput.value = "";
+          if (previewDiv) previewDiv.style.display = "none";
+          if (msgDiv) {
+            msgDiv.innerHTML = `<span style="color:#f59e0b;"><i class="fa-solid fa-forward"></i> Skipped to ${escapeHtml(nextEmail)}</span>`;
+            setTimeout(() => { if (msgDiv) msgDiv.innerHTML = ""; }, 2200);
+          }
+        } else {
+          cancelModal.style.display = "none";
+          showMessageAccs("Skipped. Reached end of accounts list.", "success");
+        }
       };
     }
 
@@ -694,6 +725,7 @@ window.Accounts = (() => {
           return domain && !normalProviders.has(domain);
         });
 
+        currentCustomDomainAccounts = customDomainAccounts;
         customDomainAccounts.sort((a, b) => {
           const dA = (a.email || "").split("@").pop();
           const dB = (b.email || "").split("@").pop();
