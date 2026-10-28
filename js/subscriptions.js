@@ -1003,7 +1003,7 @@ window.Subscriptions = (() => {
 
           subSelect.innerHTML = lastSubList.map((s, idx) => {
             const exp = s.expiry ? formatCompactDate(s.expiry) : "No expiry";
-            const expiredTag = (s.is_active === false || s.is_expired) ? " [EXPIRED]" : "";
+            const expiredTag = (s.is_active === false || s.is_expired) ? " [EXPIRED – renew first]" : "";
             const subIdPrefix = (s.sub_id || s.id) ? `#${s.sub_id || s.id} — ` : "";
             return `<option value="${idx}">${subIdPrefix}${s.accemail} (Exp: ${exp})${expiredTag}</option>`;
           }).join("");
@@ -1024,7 +1024,7 @@ window.Subscriptions = (() => {
         if (selectedIdx === "" || !lastSubList[selectedIdx]) return;
         const sub_id = lastSubList[selectedIdx].sub_id || lastSubList[selectedIdx].id;
         if (!sub_id) {
-          reactMsg.innerHTML = `<span style="color:#ef4444;">Error: Could not determine subscription ID.</span>`;
+          reactMsg.innerHTML = `<span style="color:#ef4444;">Something is wrong with this result. Search by the customer's phone number again.</span>`;
           return;
         }
 
@@ -1233,13 +1233,13 @@ window.Subscriptions = (() => {
           currentSearchType = data.type || "";
 
           if (!lastMatchList.length) {
-            reactMsg.innerHTML = `<span style="color:#f59e0b;">No matching records found</span>`;
+            reactMsg.innerHTML = `<span style="color:#f59e0b;">No customer found. Check the phone number (e.g. 96170123456) and try again.</span>`;
             return;
           }
 
           // Build select options with full contextual details
           subSelect.innerHTML = lastMatchList.map((m, idx) => {
-            const expiredTag = (m.is_active === false || m.is_expired) ? " [EXPIRED]" : "";
+            const expiredTag = (m.is_active === false || m.is_expired) ? " [EXPIRED – renew first]" : "";
             if (currentSearchType === "phone") {
               const subIdPrefix = m.sub_id ? `#${m.sub_id} — ` : "";
               const exp = m.expiry ? formatCompactDate(m.expiry) : "No expiry";
@@ -1297,14 +1297,14 @@ window.Subscriptions = (() => {
         if (currentSearchType === "phone") {
           const sub_id = currentItem.sub_id || currentItem.id;
           if (!sub_id) {
-            reactMsg.innerHTML = `<span style="color:#ef4444;">Error: Could not determine subscription ID.</span>`;
+            reactMsg.innerHTML = `<span style="color:#ef4444;">Something is wrong with this result. Search by the customer's phone number again.</span>`;
             return;
           }
           basePayload = { sub_id };
         } else {
           const secret_id = currentItem.secret_id;
           if (!secret_id) {
-            reactMsg.innerHTML = `<span style="color:#ef4444;">Error: Could not determine secret ID.</span>`;
+            reactMsg.innerHTML = `<span style="color:#ef4444;">Something is wrong with this result. Search by the customer's phone number again.</span>`;
             return;
           }
           basePayload = { secret_id };
@@ -1356,13 +1356,13 @@ window.Subscriptions = (() => {
           const isLimitPrompt = result.limit_reached === true ||
             result.prompt_confirmation === true ||
             (result.status === "limit_reached") ||
-            (typeof result.message === "string" && result.message.toLowerCase().includes("2 devices limit"));
+            (typeof result.message === "string" && result.message.toLowerCase().includes("2 devices"));
 
           if (isLimitPrompt && actionType === "initial") {
             reactBtn.style.display = "none";
             if (limitContainer) limitContainer.style.display = "block";
             if (limitPrompt) {
-              limitPrompt.textContent = result.message || "user has reached 2 devices limit. Are you sure u want to reactivate?";
+              limitPrompt.textContent = result.message || "This customer is already logged in on 2 devices (the maximum). Choose: \"Reactivate Link\" keeps those devices logged in, or \"Logout this user's devices\" logs them out so the customer can log in again.";
             }
             if (devicesList) {
               if (Array.isArray(result.devices) && result.devices.length > 0) {
