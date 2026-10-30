@@ -826,7 +826,7 @@ window.Accounts = (() => {
                 .select("id, email, password, two_factor_key, last_link, token_skipped, hidden, tag"),
               window.supabaseClient
                 .from("gpt_account_tokens")
-                .select("email, access_token_exp, status, updated_at, skipped, hidden")
+                .select("email, access_token_exp, status, error, updated_at, skipped, hidden")
             ]);
 
             if (accsRes.data && accsRes.data.length > 0) {
@@ -879,7 +879,20 @@ window.Accounts = (() => {
           return isHiddenView ? isHidden : !isHidden;
         });
 
+        // Rank: broken (needs cookies) first, then missing, then active —
+        // so the accounts that need a cookie re-save surface at the top.
+        const nowSecSort = Math.floor(Date.now() / 1000);
+        const tokenRank = (item) => {
+          const t = tokenMap.get((item.email || "").trim().toLowerCase());
+          if (!t) return 1; // missing
+          const s = (t.status || "").toLowerCase();
+          const exp = t.token_exp || t.access_token_exp;
+          if ((s && s !== "active") || (exp && exp < nowSecSort)) return 0; // broken
+          return 2; // active
+        };
         customDomainAccounts.sort((a, b) => {
+          const rA = tokenRank(a), rB = tokenRank(b);
+          if (rA !== rB) return rA - rB;
           const dA = (a.email || "").split("@").pop();
           const dB = (b.email || "").split("@").pop();
           if (dA !== dB) return dA.localeCompare(dB);
@@ -909,26 +922,41 @@ window.Accounts = (() => {
             const rowId = `acc-totp-${row.id || idx}`;
 
             let tokenStatusBadge = "";
+            let rowStateClass = "";
             let t = row.has_token ? row : tokenMap.get(em.toLowerCase());
             if (t) {
               const exp = t.token_exp || t.access_token_exp;
-              let expInfo = "";
-              if (exp) {
-                const nowSec = Math.floor(Date.now() / 1000);
-                if (exp < nowSec) {
-                  expInfo = `<span style="color:#f87171; font-size:0.72rem; margin-top:2px;">Expired</span>`;
-                } else {
+              const nowSec = Math.floor(Date.now() / 1000);
+              const statusStr = (t.status || "").toLowerCase();
+              // "Broken" = a token exists but is no longer usable (ChatGPT signed it
+              // out / session expired / exp timestamp elapsed). Distinct from "Missing"
+              // (no token at all) — these just need fresh cookies re-saved.
+              const isBroken = (statusStr && statusStr !== "active") ||
+                               (exp && exp < nowSec);
+              if (isBroken) {
+                rowStateClass = "row-needs-cookies";
+                const reason = escapeHtml(t.error || "Session no longer valid");
+                tokenStatusBadge = `
+                  <div style="display:inline-flex; flex-direction:column;">
+                    <span class="status-pill needs-cookies" title="${reason}">
+                      <i class="fa-solid fa-cookie-bite"></i> Needs Cookies
+                    </span>
+                    <span style="color:#f59e0b; font-size:0.7rem; margin-top:2px; max-width:180px; white-space:normal; line-height:1.2;">${reason}</span>
+                  </div>`;
+              } else {
+                let expInfo = "";
+                if (exp) {
                   const days = Math.round((exp - nowSec) / 86400);
                   expInfo = `<span style="color:#34d399; font-size:0.72rem; margin-top:2px;">Valid ${days}d</span>`;
                 }
+                tokenStatusBadge = `
+                  <div style="display:inline-flex; flex-direction:column;">
+                    <span class="status-pill active">
+                      <i class="fa-solid fa-circle-check"></i> Active
+                    </span>
+                    ${expInfo}
+                  </div>`;
               }
-              tokenStatusBadge = `
-                <div style="display:inline-flex; flex-direction:column;">
-                  <span class="status-pill active">
-                    <i class="fa-solid fa-circle-check"></i> Active
-                  </span>
-                  ${expInfo}
-                </div>`;
             } else {
               tokenStatusBadge = `
                 <span class="status-pill missing">
@@ -952,6 +980,7 @@ window.Accounts = (() => {
             const safePass = escapeHtml(pass);
 
             const tr = document.createElement("tr");
+            if (rowStateClass) tr.className = rowStateClass;
             tr.innerHTML = `
               <td data-label="Account">
                 <div class="acc-identity">

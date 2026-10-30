@@ -1591,6 +1591,22 @@ tr.ang-row-expired td:first-child {
   color: #ef4444;
 }
 
+/* Token exists but is no longer usable — needs fresh cookies re-saved. */
+.status-pill.needs-cookies {
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #f59e0b;
+}
+
+/* Highlight the whole row so broken-token accounts stand out in the list. */
+tr.row-needs-cookies {
+  background: rgba(245, 158, 11, 0.06);
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+tr.row-needs-cookies:hover {
+  background: rgba(245, 158, 11, 0.1);
+}
+
 /* Row Action Button */
 .btn-row-token {
   background: rgba(255, 255, 255, 0.04);
