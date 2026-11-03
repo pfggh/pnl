@@ -1664,3 +1664,73 @@ tr.row-needs-cookies:hover {
   color: #94a3b8;
   margin-top: 2px;
 }
+
+/* ==========================================================================
+   VISIBILITY FIX — every action button always fully visible in all views,
+   and no row info masked/truncated. Additive overrides (kept last on purpose).
+   ========================================================================== */
+
+/* 1. Never hide row info behind ellipsis masking — wrap instead of clip.
+   Copy-to-clipboard still works; the full value is now always readable. */
+.table-container .truncate-text,
+.table-container .code-pill {
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* 2. Action cells wrap their buttons so none is ever cut off the frame. */
+.btn-table-action { white-space: nowrap; }
+.table-container td[data-label="Actions"] > div,
+.table-container td[data-label="Action"] > div,
+.table-container .button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* 3. Desktop: readable base size + don't vertically clip wrapped content. */
+.table-container { overflow-y: visible; }
+.table-container td { font-size: 0.9rem; }
+
+/* 4. Responsive card mode (<=1024px): the old single-line flex rows pinned
+   values and button groups to one line with no wrap, pushing them out of the
+   card. Allow wrapping everywhere and stack the action buttons full-width. */
+@media (max-width: 1024px) {
+  .table-container td {
+    flex-wrap: wrap !important;
+    gap: 4px 10px !important;
+    font-size: 0.92rem !important;
+  }
+  .table-container td .truncate-text,
+  .table-container td .code-pill,
+  .table-container td > span {
+    text-align: right;
+    word-break: break-word;
+    min-width: 0;
+  }
+  /* Actions cell: label on top, buttons on their own full-width wrapped row. */
+  .table-container td[data-label="Actions"],
+  .table-container td[data-label="Action"],
+  .table-container td:last-child {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .table-container td[data-label="Actions"] > div,
+  .table-container td[data-label="Action"] > div,
+  .table-container td:last-child > div,
+  .table-container td:last-child .button-group {
+    width: 100%;
+    justify-content: stretch;
+    flex-wrap: wrap;
+  }
+  .table-container td[data-label="Actions"] .btn-table-action,
+  .table-container td[data-label="Action"] .btn-table-action,
+  .table-container td:last-child .btn-table-action {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
