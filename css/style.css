@@ -1295,28 +1295,6 @@ tr.ang-row-expired td:first-child {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Header Action Button */
-.btn-primary-action {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-  color: #fff !important;
-  font-weight: 700 !important;
-  padding: 12px 22px !important;
-  border-radius: 14px !important;
-  border: none !important;
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3) !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 9px !important;
-  cursor: pointer !important;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.btn-primary-action:hover {
-  transform: translateY(-2px) scale(1.02) !important;
-  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.45) !important;
-  filter: brightness(1.1) !important;
-}
-
 /* Clean Professional Table Layout */
 .accounts-table th {
   padding: 16px 18px;
@@ -1565,104 +1543,6 @@ tr.ang-row-expired td:first-child {
 @keyframes pulseGlow {
   from { filter: drop-shadow(0 0 1px #ef4444); }
   to { filter: drop-shadow(0 0 6px #ef4444); }
-}
-
-/* Status Badges */
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.status-pill.active {
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #10b981;
-}
-
-.status-pill.missing {
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #ef4444;
-}
-
-/* Token exists but is no longer usable — needs fresh cookies re-saved. */
-.status-pill.needs-cookies {
-  background: rgba(245, 158, 11, 0.14);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  color: #f59e0b;
-}
-
-/* Highlight the whole row so broken-token accounts stand out in the list. */
-tr.row-needs-cookies {
-  background: rgba(245, 158, 11, 0.06);
-  box-shadow: inset 3px 0 0 #f59e0b;
-}
-tr.row-needs-cookies:hover {
-  background: rgba(245, 158, 11, 0.1);
-}
-
-/* Row Action Button */
-.btn-row-token {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #f1f5f9;
-  font-weight: 600;
-  font-size: 0.78rem;
-  padding: 7px 14px;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-row-token:hover {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: #10b981;
-  color: #34d399;
-  transform: translateY(-1px);
-}
-
-/* Modal Form Polishing */
-.token-modal-card {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.token-modal-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding-bottom: 16px;
-}
-
-.token-modal-header i {
-  font-size: 1.4rem;
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.15);
-  padding: 10px;
-  border-radius: 12px;
-}
-
-.token-modal-title {
-  font-size: 1.15rem;
-  font-weight: 800;
-  color: #fff;
-}
-
-.token-modal-sub {
-  font-size: 0.82rem;
-  color: #94a3b8;
-  margin-top: 2px;
 }
 
 /* ==========================================================================

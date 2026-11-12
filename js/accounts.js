@@ -21,7 +21,6 @@ window.Accounts = (() => {
   const linkInputs = anghamiLinksDiv.querySelectorAll("input");
 
   const accTableSearch = document.getElementById("acc-table-search");
-  const openTokenModalBtn = document.getElementById("open-token-modal-btn");
   const cancelModal = document.getElementById("cancel-modal");
   const modalContent = document.getElementById("modal-content");
 
@@ -75,50 +74,49 @@ window.Accounts = (() => {
     button.addEventListener("touchcancel", stop);
   };
 
+  // Hide/skip/unhide: update `accounts` directly, then call save_gpt_token
+  // (which now only handles skip/hide/unhide on the accounts table).
+  // Succeeds if either path succeeds.
+  const setAccountHiddenState = async (cleanEmail, action, accountsPatch) => {
+    let directOk = false;
+    if (window.supabaseClient) {
+      try {
+        const { error } = await window.supabaseClient
+          .from("accounts")
+          .update(accountsPatch)
+          .eq("email", cleanEmail);
+        if (error) console.warn(`Direct accounts ${action} failed:`, error);
+        else directOk = true;
+      } catch (e) {
+        console.warn(`Direct accounts ${action} failed:`, e);
+      }
+    }
+
+    try {
+      const token = await getAuthToken();
+      const res = await fetch(`${window.SUPABASE_URL}/functions/v1/save_gpt_token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ action, email: cleanEmail })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j.error) throw new Error(j.error || `Failed to ${action} account`);
+    } catch (e) {
+      if (!directOk) throw e;
+      console.warn(`save_gpt_token ${action} failed (accounts already updated):`, e);
+    }
+  };
+
   const skipAccountToken = async (email, buttonElement = null) => {
     try {
       showSpinnerAccs(true);
       const cleanEmail = (email || "").trim().toLowerCase();
       if (!cleanEmail) return;
 
-      let success = false;
-      if (window.supabaseClient) {
-        try {
-          const { error: err1 } = await window.supabaseClient
-            .from("gpt_account_tokens")
-            .upsert({
-              email: cleanEmail,
-              status: "hidden",
-              skipped: true,
-              hidden: true,
-              updated_at: new Date().toISOString()
-            }, { onConflict: "email" });
-
-          const { error: err2 } = await window.supabaseClient
-            .from("accounts")
-            .update({ token_skipped: true, hidden: true, tag: "hidden" })
-            .eq("email", cleanEmail);
-
-          if (!err1 && !err2) success = true;
-        } catch (e) {
-          console.warn("Direct DB skip failed, trying function fallback:", e);
-        }
-      }
-
-      if (!success) {
-        const token = await getAuthToken();
-        const res = await fetch(`${window.SUPABASE_URL}/functions/v1/save_gpt_token`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({ action: "skip", email: cleanEmail })
-        });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok || j.error) throw new Error(j.error || "Failed to skip token");
-        success = true;
-      }
+      await setAccountHiddenState(cleanEmail, "skip", { token_skipped: true, hidden: true, tag: "hidden" });
 
       showMessageAccs(`Account ${cleanEmail} tagged as hidden.`, "success");
 
@@ -132,7 +130,7 @@ window.Accounts = (() => {
           setTimeout(() => {
             tr.remove();
             if (accountsIssuesTableBody && accountsIssuesTableBody.querySelectorAll("tr").length === 0) {
-              accountsIssuesTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.92rem;"><i class="fa-solid fa-inbox" style="font-size:1.8rem; display:block; margin-bottom:10px; opacity:0.5;"></i>No accounts in this view.</td></tr>`;
+              accountsIssuesTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.92rem;"><i class="fa-solid fa-inbox" style="font-size:1.8rem; display:block; margin-bottom:10px; opacity:0.5;"></i>No accounts in this view.</td></tr>`;
             }
           }, 250);
         }
@@ -153,39 +151,7 @@ window.Accounts = (() => {
       const cleanEmail = (email || "").trim().toLowerCase();
       if (!cleanEmail) return;
 
-      let success = false;
-      if (window.supabaseClient) {
-        try {
-          const { error: err1 } = await window.supabaseClient
-            .from("gpt_account_tokens")
-            .update({ status: "active", skipped: false, hidden: false })
-            .eq("email", cleanEmail);
-
-          const { error: err2 } = await window.supabaseClient
-            .from("accounts")
-            .update({ token_skipped: false, hidden: false, tag: null })
-            .eq("email", cleanEmail);
-
-          if (!err1 && !err2) success = true;
-        } catch (e) {
-          console.warn("Direct DB unhide failed, trying function fallback:", e);
-        }
-      }
-
-      if (!success) {
-        const token = await getAuthToken();
-        const res = await fetch(`${window.SUPABASE_URL}/functions/v1/save_gpt_token`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({ action: "unhide", email: cleanEmail })
-        });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok || j.error) throw new Error(j.error || "Failed to unhide account");
-        success = true;
-      }
+      await setAccountHiddenState(cleanEmail, "unhide", { token_skipped: false, hidden: false, tag: null });
 
       showMessageAccs(`Account ${cleanEmail} restored to active list.`, "success");
 
@@ -568,231 +534,6 @@ window.Accounts = (() => {
     }
   };
 
-  // Intelligent parser for Token / Session inputs
-  const parseTokenInput = (rawStr) => {
-    if (!rawStr) return null;
-    const trimmed = rawStr.trim();
-    let parsedJson = null;
-    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-      try {
-        parsedJson = JSON.parse(trimmed);
-      } catch (e) {}
-    }
-
-    let accessToken = "";
-    let sessionToken = "";
-    let targetEmail = "";
-    let planType = "";
-    let accountId = "";
-    let expTimestamp = null;
-    let cookies = {};
-
-    if (parsedJson && typeof parsedJson === "object") {
-      if (parsedJson.accessToken) accessToken = parsedJson.accessToken;
-      if (parsedJson.sessionToken) sessionToken = parsedJson.sessionToken;
-      if (parsedJson.user?.email) targetEmail = parsedJson.user.email;
-      if (parsedJson.account?.planType) planType = parsedJson.account.planType;
-      if (parsedJson.account?.id) accountId = parsedJson.account.id;
-      if (parsedJson.expires) {
-        const d = new Date(parsedJson.expires);
-        if (!isNaN(d.getTime())) expTimestamp = Math.floor(d.getTime() / 1000);
-      }
-      if (parsedJson.cookies && typeof parsedJson.cookies === "object") {
-        cookies = { ...parsedJson.cookies };
-      }
-    } else if (trimmed.startsWith("eyJ")) {
-      accessToken = trimmed;
-    }
-
-    if (accessToken) {
-      try {
-        const parts = accessToken.split(".");
-        if (parts.length >= 2) {
-          let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-          const pad = b64.length % 4;
-          if (pad) b64 += "=".repeat(4 - pad);
-          const claims = JSON.parse(atob(b64));
-          if (!targetEmail) {
-            targetEmail = claims["https://api.openai.com/profile"]?.email || claims.email || "";
-          }
-          if (!planType) {
-            planType = claims["https://api.openai.com/auth"]?.chatgpt_plan_type || "";
-          }
-          if (!accountId) {
-            accountId = claims["https://api.openai.com/auth"]?.chatgpt_account_id || "";
-          }
-          if (claims.exp) {
-            expTimestamp = Number(claims.exp);
-          }
-        }
-      } catch (e) {
-        console.warn("Could not decode accessToken JWT payload:", e);
-      }
-    }
-
-    if (sessionToken && !cookies["__Secure-next-auth.session-token"]) {
-      cookies["__Secure-next-auth.session-token"] = sessionToken;
-    }
-
-    return {
-      raw: parsedJson || { raw: trimmed },
-      rawText: trimmed,
-      accessToken,
-      sessionToken,
-      targetEmail: (targetEmail || "").trim().toLowerCase(),
-      planType,
-      accountId,
-      expTimestamp,
-      cookies
-    };
-  };
-
-  const openTokenModal = (defaultEmail = "") => {
-    if (!cancelModal || !modalContent) return;
-    const template = document.getElementById("add-token-modal-template");
-    if (!template) return;
-
-    modalContent.innerHTML = template.innerHTML;
-    cancelModal.style.display = "flex";
-
-    const emailInput = modalContent.querySelector("#token-modal-email");
-    const rawInput = modalContent.querySelector("#token-modal-raw");
-    const previewDiv = modalContent.querySelector("#token-modal-preview");
-    const previewDetails = modalContent.querySelector("#token-preview-details");
-    const saveBtn = modalContent.querySelector("#save-token-submit-btn");
-    const cancelBtn = modalContent.querySelector("#close-token-modal-btn");
-    const msgDiv = modalContent.querySelector("#token-modal-msg");
-
-    if (defaultEmail && emailInput) {
-      emailInput.value = defaultEmail;
-    }
-
-    const updatePreview = () => {
-      const parsed = parseTokenInput(rawInput.value);
-      if (!parsed || (!parsed.accessToken && !parsed.sessionToken && !parsed.targetEmail)) {
-        previewDiv.style.display = "none";
-        return;
-      }
-      previewDiv.style.display = "block";
-      if (parsed.targetEmail && (!emailInput.value || emailInput.value === defaultEmail)) {
-        emailInput.value = parsed.targetEmail;
-      }
-
-      let expStr = "Unknown";
-      if (parsed.expTimestamp) {
-        expStr = new Date(parsed.expTimestamp * 1000).toLocaleString();
-      }
-
-      const safeDetectedEmail = escapeHtml(parsed.targetEmail || emailInput.value || "");
-      const safePlanType = escapeHtml(parsed.planType || "Standard/Team");
-      const safeExpStr = escapeHtml(expStr);
-
-      previewDetails.innerHTML = `
-        <div><strong>Detected Email:</strong> ${safeDetectedEmail || '<span style="color:#f59e0b;">None (please specify)</span>'}</div>
-        <div><strong>Access Token:</strong> ${parsed.accessToken ? '<span style="color:#10b981;"><i class="fa-solid fa-check"></i> Present (JWT)</span>' : '<span style="color:#ef4444;">Missing</span>'}</div>
-        <div><strong>Session Token:</strong> ${parsed.sessionToken ? '<span style="color:#10b981;"><i class="fa-solid fa-check"></i> Present</span>' : '<span style="color:#94a3b8;">None</span>'}</div>
-        <div><strong>Plan Type:</strong> ${safePlanType}</div>
-        <div><strong>Expires At:</strong> ${safeExpStr}</div>
-      `;
-    };
-
-    if (rawInput) {
-      rawInput.addEventListener("input", updatePreview);
-      rawInput.addEventListener("paste", () => setTimeout(updatePreview, 50));
-    }
-
-    if (cancelBtn) {
-      cancelBtn.onclick = () => {
-        cancelModal.style.display = "none";
-      };
-    }
-
-    if (saveBtn) {
-      saveBtn.onclick = async () => {
-        msgDiv.innerHTML = "";
-        const email = (emailInput?.value || "").trim().toLowerCase();
-        const raw = rawInput?.value || "";
-
-        if (!raw.trim()) {
-          msgDiv.innerHTML = `<span style="color:#ef4444;">Please paste the token or session payload.</span>`;
-          return;
-        }
-
-        const parsed = parseTokenInput(raw);
-        const finalEmail = email || parsed?.targetEmail;
-        if (!finalEmail) {
-          msgDiv.innerHTML = `<span style="color:#ef4444;">Could not determine target email. Please enter the account email above.</span>`;
-          return;
-        }
-
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving...`;
-
-        try {
-          const updateRecord = {
-            email: finalEmail,
-            cookies: parsed.cookies || {},
-            raw: parsed.raw,
-            updated_at: new Date().toISOString(),
-            status: "active",
-            error: null
-          };
-          if (parsed.accessToken) updateRecord.access_token = parsed.accessToken;
-          if (parsed.expTimestamp) updateRecord.access_token_exp = parsed.expTimestamp;
-
-          let success = false;
-
-          if (window.supabaseClient) {
-            const { error: sbErr } = await window.supabaseClient
-              .from("gpt_account_tokens")
-              .upsert(updateRecord, { onConflict: "email" });
-            if (!sbErr) {
-              success = true;
-            } else {
-              console.warn("Direct upsert returned error, trying Edge Function fallback:", sbErr);
-            }
-          }
-
-          if (!success) {
-            const token = await getAuthToken();
-            const res = await fetch(`${window.SUPABASE_URL}/functions/v1/save_gpt_token`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-              },
-              body: JSON.stringify({
-                email: finalEmail,
-                rawInput: parsed.rawText || raw
-              })
-            });
-            const resData = await res.json().catch(() => ({}));
-            if (!res.ok || resData.error) {
-              throw new Error(resData.error || `Failed with HTTP ${res.status}`);
-            }
-            success = true;
-          }
-
-          msgDiv.innerHTML = `<span style="color:#10b981; font-weight:600;"><i class="fa-solid fa-circle-check"></i> Token saved successfully for ${finalEmail}!</span>`;
-
-          setTimeout(() => {
-            cancelModal.style.display = "none";
-            if (accountsViewSelector.value === "custom_domain_accounts") {
-              fetchAccountsOrIssues("custom_domain_accounts");
-            }
-          }, 1200);
-
-        } catch (err) {
-          console.error("Save token error:", err);
-          msgDiv.innerHTML = `<span style="color:#ef4444;">Error saving token: ${err.message}</span>`;
-        } finally {
-          saveBtn.disabled = false;
-          saveBtn.innerHTML = `<i class="fa-solid fa-floppy-disk" style="color:#fff;"></i> Save Token`;
-        }
-      };
-    }
-  };
-
   const fetchAccountsOrIssues = async (action) => {
     clearMessageAccs();
     showSpinnerAccs(true);
@@ -815,26 +556,17 @@ window.Accounts = (() => {
           : `<span>Custom Domain Accounts</span><span style="font-size:0.82rem; font-weight:normal; color:var(--text-muted); margin-left:12px;">Click to calculate & copy verification code (<strong class="totp-countdown-global" style="color:#10b981;">30s</strong> cycle)</span>`;
 
         let accs = [];
-        let tokenMap = new Map();
 
         let fetchedViaClient = false;
         if (window.supabaseClient) {
           try {
-            const [accsRes, tokensRes] = await Promise.all([
-              window.supabaseClient
-                .from("accounts")
-                .select("id, email, password, two_factor_key, last_link, token_skipped, hidden, tag"),
-              window.supabaseClient
-                .from("gpt_account_tokens")
-                .select("email, access_token_exp, status, error, updated_at, skipped, hidden")
-            ]);
+            const accsRes = await window.supabaseClient
+              .from("accounts")
+              .select("id, email, password, two_factor_key, last_link, token_skipped, hidden, tag");
 
             if (accsRes.data && accsRes.data.length > 0) {
               accs = accsRes.data;
               fetchedViaClient = true;
-              if (tokensRes.data) {
-                tokensRes.data.forEach(t => tokenMap.set((t.email || "").toLowerCase().trim(), t));
-              }
             }
           } catch (e) {
             console.warn("Client fetch failed, using edge function fallback:", e);
@@ -873,26 +605,12 @@ window.Accounts = (() => {
           const domain = em.split("@").pop().trim();
           if (!domain || normalProviders.has(domain)) return false;
 
-          const t = tokenMap.get(em);
-          const isHidden = item.hidden === true || item.token_skipped === true || item.tag === "hidden" ||
-                           t?.skipped === true || t?.hidden === true || t?.status === "hidden" || t?.status === "skipped";
+          const isHidden = item.hidden === true || item.token_skipped === true || item.tag === "hidden";
           return isHiddenView ? isHidden : !isHidden;
         });
 
-        // Rank: broken (needs cookies) first, then missing, then active —
-        // so the accounts that need a cookie re-save surface at the top.
-        const nowSecSort = Math.floor(Date.now() / 1000);
-        const tokenRank = (item) => {
-          const t = tokenMap.get((item.email || "").trim().toLowerCase());
-          if (!t) return 1; // missing
-          const s = (t.status || "").toLowerCase();
-          const exp = t.token_exp || t.access_token_exp;
-          if ((s && s !== "active") || (exp && exp < nowSecSort)) return 0; // broken
-          return 2; // active
-        };
+        // Sort by domain, then email
         customDomainAccounts.sort((a, b) => {
-          const rA = tokenRank(a), rB = tokenRank(b);
-          if (rA !== rB) return rA - rB;
           const dA = (a.email || "").split("@").pop();
           const dB = (b.email || "").split("@").pop();
           if (dA !== dB) return dA.localeCompare(dB);
@@ -902,16 +620,15 @@ window.Accounts = (() => {
         accountsIssuesTable.classList.add("accounts-table");
         accountsIssuesTableHead.innerHTML = `
           <tr>
-            <th style="width: 24%;">Account <button class="sort-btn" data-column="0">↕️</button></th>
-            <th style="width: 18%;">Password <button class="sort-btn" data-column="1">↕️</button></th>
-            <th style="width: 24%;">Verification Code (2FA) <button class="sort-btn" data-column="2">↕️</button></th>
-            <th style="width: 14%;">Token Status <button class="sort-btn" data-column="3">↕️</button></th>
+            <th style="width: 30%;">Account <button class="sort-btn" data-column="0">↕️</button></th>
+            <th style="width: 22%;">Password <button class="sort-btn" data-column="1">↕️</button></th>
+            <th style="width: 28%;">Verification Code (2FA) <button class="sort-btn" data-column="2">↕️</button></th>
             <th style="width: 20%; text-align: right;">Actions</th>
           </tr>`;
 
         if (customDomainAccounts.length === 0) {
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="5" style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.92rem;"><i class="fa-solid fa-inbox" style="font-size:1.8rem; display:block; margin-bottom:10px; opacity:0.5;"></i>No custom domain accounts found.</td>`;
+          tr.innerHTML = `<td colspan="4" style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.92rem;"><i class="fa-solid fa-inbox" style="font-size:1.8rem; display:block; margin-bottom:10px; opacity:0.5;"></i>No custom domain accounts found.</td>`;
           accountsIssuesTableBody.appendChild(tr);
         } else {
           customDomainAccounts.forEach((row, idx) => {
@@ -920,49 +637,6 @@ window.Accounts = (() => {
             const pass = row.password || "";
             const key = (row.two_factor_key || "").trim();
             const rowId = `acc-totp-${row.id || idx}`;
-
-            let tokenStatusBadge = "";
-            let rowStateClass = "";
-            let t = row.has_token ? row : tokenMap.get(em.toLowerCase());
-            if (t) {
-              const exp = t.token_exp || t.access_token_exp;
-              const nowSec = Math.floor(Date.now() / 1000);
-              const statusStr = (t.status || "").toLowerCase();
-              // "Broken" = a token exists but is no longer usable (ChatGPT signed it
-              // out / session expired / exp timestamp elapsed). Distinct from "Missing"
-              // (no token at all) — these just need fresh cookies re-saved.
-              const isBroken = (statusStr && statusStr !== "active") ||
-                               (exp && exp < nowSec);
-              if (isBroken) {
-                rowStateClass = "row-needs-cookies";
-                const reason = escapeHtml(t.error || "Session no longer valid");
-                tokenStatusBadge = `
-                  <div style="display:inline-flex; flex-direction:column;">
-                    <span class="status-pill needs-cookies" title="${reason}">
-                      <i class="fa-solid fa-cookie-bite"></i> Needs Cookies
-                    </span>
-                    <span style="color:#f59e0b; font-size:0.7rem; margin-top:2px; max-width:180px; white-space:normal; line-height:1.2;">${reason}</span>
-                  </div>`;
-              } else {
-                let expInfo = "";
-                if (exp) {
-                  const days = Math.round((exp - nowSec) / 86400);
-                  expInfo = `<span style="color:#34d399; font-size:0.72rem; margin-top:2px;">Valid ${days}d</span>`;
-                }
-                tokenStatusBadge = `
-                  <div style="display:inline-flex; flex-direction:column;">
-                    <span class="status-pill active">
-                      <i class="fa-solid fa-circle-check"></i> Active
-                    </span>
-                    ${expInfo}
-                  </div>`;
-              }
-            } else {
-              tokenStatusBadge = `
-                <span class="status-pill missing">
-                  <i class="fa-solid fa-circle-xmark"></i> Missing
-                </span>`;
-            }
 
             let codeCellHtml = "";
             if (key) {
@@ -980,7 +654,6 @@ window.Accounts = (() => {
             const safePass = escapeHtml(pass);
 
             const tr = document.createElement("tr");
-            if (rowStateClass) tr.className = rowStateClass;
             tr.innerHTML = `
               <td data-label="Account">
                 <div class="acc-identity">
@@ -1004,14 +677,8 @@ window.Accounts = (() => {
               <td data-label="Verification Code" class="td-totp-cell">
                 ${codeCellHtml}
               </td>
-              <td data-label="Token Status">
-                ${tokenStatusBadge}
-              </td>
               <td data-label="Actions" style="text-align: right; white-space: nowrap;">
                 <div style="display:inline-flex; align-items:center; gap:8px; justify-content:flex-end;">
-                  <button class="btn-row-token add-token-row-btn" data-email="${safeEm}" title="Add/Update Token">
-                    <i class="fa-solid fa-key" style="color:#10b981;"></i> Update
-                  </button>
                   ${!isHiddenView ? `
                   <button class="btn-table-action btn-hold-skip skip-acc-token-btn" data-email="${safeEm}" title="Hold to Skip (Adds hidden tag)">
                     <i class="fa-solid fa-forward"></i> Hold to Skip
@@ -1190,12 +857,6 @@ window.Accounts = (() => {
       });
     }
 
-    if (openTokenModalBtn) {
-      openTokenModalBtn.addEventListener("click", () => {
-        openTokenModal("");
-      });
-    }
-
     if (accountsIssuesTableBody) {
       accountsIssuesTableBody.addEventListener("click", async (e) => {
         // 1. Delegated generic copy handler (email, pass, code text)
@@ -1269,9 +930,6 @@ window.Accounts = (() => {
             btn.disabled = false;
             btn.textContent = oldText;
           }
-        } else if (btn.classList.contains("add-token-row-btn")) {
-          const email = btn.dataset.email;
-          openTokenModal(email);
         }
       });
     }
@@ -1286,7 +944,6 @@ window.Accounts = (() => {
     showMessageAccs,
     clearMessageAccs,
     fetchAccountsOrIssues,
-    openTokenModal,
     markAsFixed,
     deleteAcc,
     init

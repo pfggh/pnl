@@ -8,7 +8,7 @@
   <meta name="referrer" content="no-referrer" />
   <title>Admin Panel</title>
   <!-- External CSS and Supabase JS -->
-  <link rel="stylesheet" href="css/style.css?v=20261026_hide_v1" />
+  <link rel="stylesheet" href="css/style.css?v=20261113_sublinks_v1" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
@@ -220,71 +220,8 @@
           <!-- Standard Reactivate Button -->
           <button id="reactivate-link-btn" class="pill-btn" style="display:none; width:100%; background:#10b981; justify-content:center;"><i class="fa-solid fa-bolt" style="color:#fff"></i> Reactivate</button>
 
-          <!-- 2-Device Limit Confirmation Container -->
-          <div id="reactivate-link-limit-container" style="display:none; margin-top:15px; background:rgba(245, 158, 11, 0.08); border:1px solid rgba(245, 158, 11, 0.35); border-radius:14px; padding:18px;">
-            <div style="display:flex; align-items:center; gap:10px; color:#f59e0b; font-weight:700; margin-bottom:10px; font-size:0.95rem;">
-              <i class="fa-solid fa-triangle-exclamation"></i> Device Limit Reached
-            </div>
-            <p id="reactivate-link-limit-prompt" style="color:#fcd34d; font-size:0.9rem; margin-bottom:14px; line-height:1.45;">
-              user has reached 2 devices limit. Are you sure u want to reactivate?
-            </p>
-            <div id="reactivate-link-devices-list" style="display:none; margin-bottom:14px; background:rgba(0, 0, 0, 0.25); border-radius:10px; padding:10px; font-size:0.82rem; color:#cbd5e1;"></div>
-            <div style="display:flex; flex-direction:column; gap:10px;">
-              <button id="reactivate-link-force-btn" class="pill-btn" style="width:100%; background:rgba(245, 158, 11, 0.2); border-color:#f59e0b; color:#fbbf24; justify-content:center;">
-                <i class="fa-solid fa-bolt" style="color:#fbbf24;"></i> Reactivate Link
-              </button>
-              <button id="reactivate-link-logout-btn" class="pill-btn" style="width:100%; background:#ef4444; border-color:#ef4444; color:#fff; justify-content:center;">
-                <i class="fa-solid fa-arrow-right-from-bracket" style="color:#fff;"></i> Logout this user's devices
-              </button>
-              <button id="reactivate-link-back-btn" class="pill-btn" style="width:100%; background:transparent; border-color:var(--border); color:var(--text-muted); justify-content:center; font-size:0.78rem; padding:8px 12px;">
-                Cancel
-              </button>
-            </div>
-          </div>
-
           <!-- Message and Success Display -->
           <div id="reactivate-link-msg" style="margin-top:15px; text-align:center;"></div>
-        </div>
-
-        <!-- Add Token Modal Template -->
-        <div id="add-token-modal-template" style="display:none">
-          <div class="token-modal-card">
-            <div class="token-modal-header">
-              <i class="fa-solid fa-key"></i>
-              <div>
-                <div class="token-modal-title">Intelligent Token Ingestion</div>
-                <div class="token-modal-sub">Paste full session JSON, accessToken JWT, or session token. Both raw and processed tokens are stored automatically.</div>
-              </div>
-            </div>
-
-            <div>
-              <label style="display:block; font-size:0.8rem; color:#94a3b8; margin-bottom:6px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Target Account Email</label>
-              <input type="email" id="token-modal-email" placeholder="Auto-detected from JSON or enter email (e.g. gptleb.yyd@teshrij.com)" style="width:100%; font-size:0.88rem;" />
-            </div>
-
-            <div>
-              <label style="display:block; font-size:0.8rem; color:#94a3b8; margin-bottom:6px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Token / Session Payload</label>
-              <textarea id="token-modal-raw" placeholder='{"accessToken":"eyJhbGciOi...","sessionToken":"...","user":{"email":"..."}}' style="width:100%; height:180px; padding:14px; background:rgba(0,0,0,0.45); border:1px solid rgba(255,255,255,0.1); border-radius:14px; color:#f1f5f9; font-family:'JetBrains Mono','Fira Code',monospace; font-size:0.8rem; line-height:1.45; resize:vertical;"></textarea>
-            </div>
-
-            <!-- Preview & Diagnostic Area -->
-            <div id="token-modal-preview" style="display:none; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.3); border-radius:14px; padding:14px; font-size:0.82rem;">
-              <div style="color:#34d399; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:7px;">
-                <i class="fa-solid fa-circle-check"></i> Intelligent Parser Diagnostics
-              </div>
-              <div id="token-preview-details" style="color:#cbd5e1; line-height:1.55;"></div>
-            </div>
-
-            <div style="display:flex; gap:12px; margin-top:4px;">
-              <button id="save-token-submit-btn" class="btn-primary-action" style="flex:1; justify-content:center; padding:13px !important;">
-                <i class="fa-solid fa-floppy-disk"></i> Save & Process Token
-              </button>
-              <button id="close-token-modal-btn" class="pill-btn" style="background:rgba(255,255,255,0.04); border-color:rgba(255,255,255,0.1); color:#94a3b8; padding:13px 20px;">
-                Cancel
-              </button>
-            </div>
-            <div id="token-modal-msg" style="text-align:center; font-size:0.85rem; font-weight:600;"></div>
-          </div>
         </div>
 
         <div id="replace-gpt-teshrijxyz-modal-template" style="display:none">
@@ -387,9 +324,6 @@
             <i class="fa-solid fa-magnifying-glass"></i>
             <input type="text" id="acc-table-search" placeholder="Search accounts, domains, passwords..." />
           </div>
-          <button id="open-token-modal-btn" class="btn-primary-action">
-            <i class="fa-solid fa-plus-circle"></i> Add Token
-          </button>
         </div>
         <h2 class="section-title" id="accounts-issues-title">Current View</h2>
         <div class="table-container">
@@ -740,8 +674,8 @@
 
   <!-- External JS scripts -->
   <script src="js/config.js?v=20261026_hide_v1"></script>
-  <script src="js/subscriptions.js?v=20261026_hide_v1"></script>
-  <script src="js/accounts.js?v=20261026_hide_v1"></script>
+  <script src="js/subscriptions.js?v=20261113_sublinks_v1"></script>
+  <script src="js/accounts.js?v=20261113_sublinks_v1"></script>
   <script src="js/team.js?v=20261026_hide_v1"></script>
   <script src="js/misc.js?v=20261026_hide_v1"></script>
   <script src="js/messaging_stats.js?v=20261026_hide_v1"></script>
