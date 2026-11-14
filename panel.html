@@ -8,7 +8,7 @@
   <meta name="referrer" content="no-referrer" />
   <title>Admin Panel</title>
   <!-- External CSS and Supabase JS -->
-  <link rel="stylesheet" href="css/style.css?v=20261113_sublinks_v1" />
+  <link rel="stylesheet" href="css/style.css?v=20261115_gpt_status_v1" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
@@ -180,6 +180,7 @@
             <button id="reactivate-search-btn" class="pill-btn" style="background:var(--primary); padding:10px 20px;"><i
                 class="fa-solid fa-magnifying-glass" style="color:#fff"></i> Search</button>
           </div>
+          <div id="reactivate-status-list" style="display:none;"></div>
           <select id="reactivate-sub-select" style="display:none; width:100%; margin-bottom:15px;"></select>
           <button id="reactivate-btn" class="pill-btn"
             style="display:none; width:100%; background:var(--primary); justify-content:center;"><i
@@ -305,6 +306,10 @@
               <input type="text" id="link4" placeholder="Link 4" />
               <input type="text" id="link5" placeholder="Link 5" />
             </div>
+
+            <div id="gpt-2fa-wrap" style="display:none;">
+              <input type="text" id="acc-2fa" placeholder="2FA secret key (optional, base32 or otpauth:// link)" autocomplete="off" spellcheck="false" />
+            </div>
             <button type="submit" id="add-acc-btn"><i class="fa-solid fa-plus-circle"></i> Add Account</button>
           </form>
         </div>
@@ -314,7 +319,7 @@
           <div style="flex: 1; min-width: 230px;">
             <select id="accounts-view-selector" style="margin: 0; background: rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.1); font-weight: 600;">
               <option value="custom_domain_accounts" selected>Custom Domain Accounts (Emails, Passwords & 2FA)</option>
-              <option value="hidden_accounts">Hidden Accounts (Skipped)</option>
+              <option value="hidden_accounts">Non-active Accounts (hidden, banned, review...)</option>
               <option value="accs">All Netflix Accounts</option>
               <option value="fetchissues">All Issues</option>
               <option value="fetchunfixed">Unsolved Issues</option>
@@ -674,8 +679,8 @@
 
   <!-- External JS scripts -->
   <script src="js/config.js?v=20261026_hide_v1"></script>
-  <script src="js/subscriptions.js?v=20261113_sublinks_v1"></script>
-  <script src="js/accounts.js?v=20261113_sublinks_v1"></script>
+  <script src="js/subscriptions.js?v=20261115_gpt_status_v1"></script>
+  <script src="js/accounts.js?v=20261115_gpt_status_v1"></script>
   <script src="js/team.js?v=20261026_hide_v1"></script>
   <script src="js/misc.js?v=20261026_hide_v1"></script>
   <script src="js/messaging_stats.js?v=20261026_hide_v1"></script>

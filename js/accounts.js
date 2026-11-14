@@ -18,6 +18,8 @@ window.Accounts = (() => {
   const link4El = document.getElementById("link4");
   const link5El = document.getElementById("link5");
   const anghamiLinksDiv = document.getElementById("anghami-links");
+  const gpt2faWrap = document.getElementById("gpt-2fa-wrap");
+  const acc2fa = document.getElementById("acc-2fa");
   const linkInputs = anghamiLinksDiv.querySelectorAll("input");
 
   const accTableSearch = document.getElementById("acc-table-search");
@@ -74,24 +76,32 @@ window.Accounts = (() => {
     button.addEventListener("touchcancel", stop);
   };
 
-  // Hide/skip/unhide: update `accounts` directly, then call save_gpt_token
-  // (which now only handles skip/hide/unhide on the accounts table).
-  // Succeeds if either path succeeds.
-  const setAccountHiddenState = async (cleanEmail, action, accountsPatch) => {
-    let directOk = false;
-    if (window.supabaseClient) {
-      try {
-        const { error } = await window.supabaseClient
-          .from("accounts")
-          .update(accountsPatch)
-          .eq("email", cleanEmail);
-        if (error) console.warn(`Direct accounts ${action} failed:`, error);
-        else directOk = true;
-      } catch (e) {
-        console.warn(`Direct accounts ${action} failed:`, e);
-      }
-    }
+  // ChatGPT account status (gpt_accs.status). Only exactly "active" is sold / used for replacements /
+  // counted as stock; any other text (hidden, banned, review, a note...) takes the account out of use.
+  // Its customers keep their links; staff move them with Replace when they write in.
+  // Written only through save_gpt_token { action: "set_status", email, status }.
+  const STATUS_PRESETS = [
+    { status: "active", label: "Active", icon: "fa-solid fa-circle-check" },
+    { status: "hidden", label: "Hidden", icon: "fa-solid fa-eye-slash" },
+    { status: "banned", label: "Banned", icon: "fa-solid fa-ban" }
+  ];
+  const MAX_STATUS_LEN = 60;
 
+  // Older fetchpendingpayment responses (before gpt_accs.status) only carried the hidden flags.
+  const accStatusOf = (row) => {
+    const s = row && typeof row.status === "string" ? row.status.trim() : "";
+    if (s) return s;
+    return row && (row.hidden === true || row.token_skipped === true || row.tag === "hidden") ? "hidden" : "active";
+  };
+
+  const setAccountStatus = async (email, rawStatus, buttonElement = null) => {
+    const cleanEmail = (email || "").trim().toLowerCase();
+    let status = String(rawStatus || "").trim().slice(0, MAX_STATUS_LEN);
+    if (status.toLowerCase() === "active") status = "active"; // only the exact lowercase word counts
+    if (!cleanEmail || !status) return;
+
+    clearMessageAccs();
+    showSpinnerAccs(true);
     try {
       const token = await getAuthToken();
       const res = await fetch(`${window.SUPABASE_URL}/functions/v1/save_gpt_token`, {
@@ -100,77 +110,74 @@ window.Accounts = (() => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ action, email: cleanEmail })
+        body: JSON.stringify({ action: "set_status", email: cleanEmail, status })
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok || j.error) throw new Error(j.error || `Failed to ${action} account`);
-    } catch (e) {
-      if (!directOk) throw e;
-      console.warn(`save_gpt_token ${action} failed (accounts already updated):`, e);
-    }
-  };
+      if (!res.ok || j.error) throw new Error(j.error || `Could not set status (HTTP ${res.status})`);
 
-  const skipAccountToken = async (email, buttonElement = null) => {
-    try {
-      showSpinnerAccs(true);
-      const cleanEmail = (email || "").trim().toLowerCase();
-      if (!cleanEmail) return;
+      showMessageAccs(
+        status === "active"
+          ? `Account ${cleanEmail} is active again (back in stock).`
+          : `Account ${cleanEmail} set to "${status}": out of stock. Its customers keep their links.`,
+        "success"
+      );
 
-      await setAccountHiddenState(cleanEmail, "skip", { token_skipped: true, hidden: true, tag: "hidden" });
-
-      showMessageAccs(`Account ${cleanEmail} tagged as hidden.`, "success");
-
-      // Instantly remove row from view with smooth slide/fade
-      if (buttonElement) {
-        const tr = buttonElement.closest("tr");
-        if (tr) {
-          tr.style.transition = "all 0.25s ease";
-          tr.style.opacity = "0";
-          tr.style.transform = "translateX(20px)";
-          setTimeout(() => {
-            tr.remove();
-            if (accountsIssuesTableBody && accountsIssuesTableBody.querySelectorAll("tr").length === 0) {
-              accountsIssuesTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.92rem;"><i class="fa-solid fa-inbox" style="font-size:1.8rem; display:block; margin-bottom:10px; opacity:0.5;"></i>No accounts in this view.</td></tr>`;
-            }
-          }, 250);
-        }
-      } else {
+      const tr = buttonElement ? buttonElement.closest("tr") : null;
+      if (!tr) {
         fetchAccountsOrIssues(accountsViewSelector?.value || "custom_domain_accounts");
+        return;
       }
+      const inHiddenView = (accountsViewSelector?.value || "") === "hidden_accounts";
+      const stillBelongs = inHiddenView ? status !== "active" : status === "active";
+      if (stillBelongs) {
+        renderStatusControls(tr, cleanEmail, status); // e.g. hidden -> banned inside the non-active view
+        return;
+      }
+      // Row leaves this view: smooth slide/fade
+      tr.style.transition = "all 0.25s ease";
+      tr.style.opacity = "0";
+      tr.style.transform = "translateX(20px)";
+      setTimeout(() => {
+        tr.remove();
+        if (accountsIssuesTableBody && accountsIssuesTableBody.querySelectorAll("tr").length === 0) {
+          accountsIssuesTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.92rem;"><i class="fa-solid fa-inbox" style="font-size:1.8rem; display:block; margin-bottom:10px; opacity:0.5;"></i>No accounts in this view.</td></tr>`;
+        }
+      }, 250);
     } catch (err) {
-      console.error("skipAccountToken error:", err);
-      showMessageAccs(`Error skipping account: ${err.message}`, "error");
+      console.error("setAccountStatus error:", err);
+      showMessageAccs(`Error setting status: ${err.message}`, "error");
     } finally {
       showSpinnerAccs(false);
     }
   };
 
-  const unhideAccount = async (email, buttonElement = null) => {
-    try {
-      showSpinnerAccs(true);
-      const cleanEmail = (email || "").trim().toLowerCase();
-      if (!cleanEmail) return;
+  const statusBadgeHtml = (status) => {
+    const isActive = status === "active";
+    return `<span class="acc-status-badge${isActive ? "" : " inactive"}" title="${isActive ? "In stock: sold and used for replacements" : "Not active: never sold or used for replacements"}">${escapeHtml(status)}</span>`;
+  };
 
-      await setAccountHiddenState(cleanEmail, "unhide", { token_skipped: false, hidden: false, tag: null });
+  // Status badge in the Account cell + quick buttons in the Actions cell. Preset buttons are
+  // hold-to-confirm (like the old Hold to Skip); Custom asks for the text.
+  const renderStatusControls = (tr, email, status) => {
+    tr.dataset.status = status;
+    const badgeSlot = tr.querySelector(".acc-status-slot");
+    if (badgeSlot) badgeSlot.innerHTML = statusBadgeHtml(status);
 
-      showMessageAccs(`Account ${cleanEmail} restored to active list.`, "success");
+    const cell = tr.querySelector(".acc-status-actions");
+    if (!cell) return;
+    const safeEm = escapeHtml(email);
+    cell.innerHTML = STATUS_PRESETS.map(p => {
+      const current = p.status === status;
+      return `<button type="button" class="btn-table-action btn-hold-skip acc-status-btn acc-status-${p.status}${current ? " current" : ""}" data-email="${safeEm}" data-status="${p.status}" ${current ? "disabled" : ""} title="${current ? `Already ${p.status}` : `Hold to set status: ${p.status}`}">
+          <i class="${p.icon}"></i> ${p.label}
+        </button>`;
+    }).join("") + `<button type="button" class="btn-table-action acc-status-custom" data-email="${safeEm}" title="Set any other status text (anything except active takes the account out of stock)">
+          <i class="fa-solid fa-pen"></i> Custom
+        </button>`;
 
-      if (buttonElement) {
-        const tr = buttonElement.closest("tr");
-        if (tr) {
-          tr.style.transition = "all 0.25s ease";
-          tr.style.opacity = "0";
-          setTimeout(() => tr.remove(), 250);
-        }
-      } else {
-        fetchAccountsOrIssues(accountsViewSelector?.value || "hidden_accounts");
-      }
-    } catch (err) {
-      console.error("unhideAccount error:", err);
-      showMessageAccs(`Error restoring account: ${err.message}`, "error");
-    } finally {
-      showSpinnerAccs(false);
-    }
+    cell.querySelectorAll(".acc-status-btn:not([disabled])").forEach(btn => {
+      bindHoldToSkip(btn, () => setAccountStatus(btn.dataset.email, btn.dataset.status, btn));
+    });
   };
 
   // Track accounts where the user clicked to reveal 2FA:
@@ -450,7 +457,28 @@ window.Accounts = (() => {
     }
   }
 
+  // 2FA secret for a new ChatGPT account: base32 (spaces ignored) or an otpauth:// URI.
+  // Returns "" when empty, null when it does not look like a TOTP secret.
+  function normalize2faKey(raw) {
+    let v = String(raw || "").trim();
+    if (!v) return "";
+    if (/^otpauth:\/\//i.test(v)) {
+      try {
+        v = new URL(v).searchParams.get("secret") || "";
+      } catch {
+        return null;
+      }
+    }
+    v = v.replace(/[\s-]/g, "").toUpperCase().replace(/=+$/, "");
+    return /^[A-Z2-7]{16,}$/.test(v) ? v : null;
+  }
+
   function toggleAnghamiLinks() {
+    if (gpt2faWrap) {
+      const isGpt = accService && accService.value === "chatGPT";
+      gpt2faWrap.style.display = isGpt ? "block" : "none";
+      if (!isGpt && acc2fa) acc2fa.value = "";
+    }
     if (accService && anghamiLinksDiv) {
       if (accService.value === "Anghami") {
         anghamiLinksDiv.style.display = "block";
@@ -552,40 +580,21 @@ window.Accounts = (() => {
       if (action === "custom_domain_accounts" || action === "hidden_accounts") {
         const isHiddenView = action === "hidden_accounts";
         accountsIssuesTitle.innerHTML = isHiddenView
-          ? `<span>Hidden Accounts (Skipped)</span><span style="font-size:0.82rem; font-weight:normal; color:var(--text-muted); margin-left:12px;">Accounts tagged as hidden. Click Restore to unhide.</span>`
+          ? `<span>Non-active Accounts</span><span style="font-size:0.82rem; font-weight:normal; color:var(--text-muted); margin-left:12px;">Status is not <strong>active</strong> (hidden, banned, review...): never sold or used for replacements. Customers keep their links. Hold Active to put one back in stock.</span>`
           : `<span>Custom Domain Accounts</span><span style="font-size:0.82rem; font-weight:normal; color:var(--text-muted); margin-left:12px;">Click to calculate & copy verification code (<strong class="totp-countdown-global" style="color:#10b981;">30s</strong> cycle)</span>`;
 
-        let accs = [];
-
-        let fetchedViaClient = false;
-        if (window.supabaseClient) {
-          try {
-            const accsRes = await window.supabaseClient
-              .from("accounts")
-              .select("id, email, password, two_factor_key, last_link, token_skipped, hidden, tag");
-
-            if (accsRes.data && accsRes.data.length > 0) {
-              accs = accsRes.data;
-              fetchedViaClient = true;
-            }
-          } catch (e) {
-            console.warn("Client fetch failed, using edge function fallback:", e);
-          }
-        }
-
-        if (!fetchedViaClient) {
-          const response = await fetch(window.SUPABASE_URL + "/functions/v1/fetchpendingpayment", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({ action })
-          });
-          const json = await response.json();
-          if (json.error) throw new Error(json.error);
-          accs = json.accounts || [];
-        }
+        // gpt_accs via fetchpendingpayment (the server already splits active / non-active by status)
+        const response = await fetch(window.SUPABASE_URL + "/functions/v1/fetchpendingpayment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ action })
+        });
+        const json = await response.json();
+        if (json.error) throw new Error(json.error);
+        const accs = json.accounts || [];
 
         const normalProviders = new Set([
           "gmail.com",
@@ -605,12 +614,16 @@ window.Accounts = (() => {
           const domain = em.split("@").pop().trim();
           if (!domain || normalProviders.has(domain)) return false;
 
-          const isHidden = item.hidden === true || item.token_skipped === true || item.tag === "hidden";
-          return isHiddenView ? isHidden : !isHidden;
+          const isInactive = accStatusOf(item) !== "active";
+          return isHiddenView ? isInactive : !isInactive;
         });
 
-        // Sort by domain, then email
+        // Sort by status (non-active view), then domain, then email
         customDomainAccounts.sort((a, b) => {
+          if (isHiddenView) {
+            const sA = accStatusOf(a), sB = accStatusOf(b);
+            if (sA !== sB) return sA.localeCompare(sB);
+          }
           const dA = (a.email || "").split("@").pop();
           const dB = (b.email || "").split("@").pop();
           if (dA !== dB) return dA.localeCompare(dB);
@@ -620,21 +633,22 @@ window.Accounts = (() => {
         accountsIssuesTable.classList.add("accounts-table");
         accountsIssuesTableHead.innerHTML = `
           <tr>
-            <th style="width: 30%;">Account <button class="sort-btn" data-column="0">↕️</button></th>
-            <th style="width: 22%;">Password <button class="sort-btn" data-column="1">↕️</button></th>
-            <th style="width: 28%;">Verification Code (2FA) <button class="sort-btn" data-column="2">↕️</button></th>
-            <th style="width: 20%; text-align: right;">Actions</th>
+            <th style="width: 28%;">Account <button class="sort-btn" data-column="0">↕️</button></th>
+            <th style="width: 18%;">Password <button class="sort-btn" data-column="1">↕️</button></th>
+            <th style="width: 22%;">Verification Code (2FA) <button class="sort-btn" data-column="2">↕️</button></th>
+            <th style="width: 32%; text-align: right;">Status</th>
           </tr>`;
 
         if (customDomainAccounts.length === 0) {
           const tr = document.createElement("tr");
-          tr.innerHTML = `<td colspan="4" style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.92rem;"><i class="fa-solid fa-inbox" style="font-size:1.8rem; display:block; margin-bottom:10px; opacity:0.5;"></i>No custom domain accounts found.</td>`;
+          tr.innerHTML = `<td colspan="4" style="text-align:center; padding:40px; color:var(--text-muted); font-size:0.92rem;"><i class="fa-solid fa-inbox" style="font-size:1.8rem; display:block; margin-bottom:10px; opacity:0.5;"></i>${isHiddenView ? "No non-active accounts." : "No custom domain accounts found."}</td>`;
           accountsIssuesTableBody.appendChild(tr);
         } else {
           customDomainAccounts.forEach((row, idx) => {
             const em = (row.email || "").trim();
             const domain = em.includes("@") ? em.split("@")[1].toLowerCase() : "";
-            const pass = row.password || "";
+            const pass = row.password ?? row.pass ?? "";
+            const status = accStatusOf(row);
             const key = (row.two_factor_key || "").trim();
             const rowId = `acc-totp-${row.id || idx}`;
 
@@ -664,7 +678,7 @@ window.Accounts = (() => {
                     <span class="acc-email-text" title="Click to copy email" data-copy="${safeEm}">
                       ${safeEm} <i class="fa-regular fa-copy" style="font-size:0.72rem; opacity:0.6;"></i>
                     </span>
-                    <span class="acc-domain-tag">@${safeDomain}</span>
+                    <span class="acc-domain-tag">@${safeDomain} <span class="acc-status-slot"></span></span>
                   </div>
                 </div>
               </td>
@@ -677,35 +691,12 @@ window.Accounts = (() => {
               <td data-label="Verification Code" class="td-totp-cell">
                 ${codeCellHtml}
               </td>
-              <td data-label="Actions" style="text-align: right; white-space: nowrap;">
-                <div style="display:inline-flex; align-items:center; gap:8px; justify-content:flex-end;">
-                  ${!isHiddenView ? `
-                  <button class="btn-table-action btn-hold-skip skip-acc-token-btn" data-email="${safeEm}" title="Hold to Skip (Adds hidden tag)">
-                    <i class="fa-solid fa-forward"></i> Hold to Skip
-                  </button>` : `
-                  <button class="btn-table-action unhide-acc-btn" data-email="${safeEm}" style="background:rgba(99,102,241,0.12); border-color:rgba(99,102,241,0.3); color:#a5b4fc;" title="Restore Account">
-                    <i class="fa-solid fa-rotate-left"></i> Restore
-                  </button>`}
-                </div>
+              <td data-label="Status" style="text-align: right; white-space: nowrap;">
+                <div class="acc-status-actions" style="display:inline-flex; align-items:center; gap:6px; justify-content:flex-end; flex-wrap:wrap;"></div>
               </td>
             `;
             accountsIssuesTableBody.appendChild(tr);
-          });
-
-          // Bind hold-to-skip for active skip buttons
-          accountsIssuesTableBody.querySelectorAll(".skip-acc-token-btn").forEach(btn => {
-            bindHoldToSkip(btn, () => {
-              const email = btn.dataset.email;
-              skipAccountToken(email, btn);
-            });
-          });
-
-          // Bind restore buttons for hidden accounts view
-          accountsIssuesTableBody.querySelectorAll(".unhide-acc-btn").forEach(btn => {
-            btn.addEventListener("click", () => {
-              const email = btn.dataset.email;
-              unhideAccount(email, btn);
-            });
+            renderStatusControls(tr, em, status);
           });
         }
 
@@ -793,6 +784,7 @@ window.Accounts = (() => {
   };
 
   const init = () => {
+    toggleAnghamiLinks(); // the browser may restore the service select on reload
     if (addAccForm) {
       addAccForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -818,8 +810,16 @@ window.Accounts = (() => {
           url = "/functions/v1/addanghamiacc";
           payload = { email: emailValue, pass: passValue, link1: links[0], link2: links[1], link3: links[2], link4: links[3], link5: links[4] };
         } else if (serviceValue === "chatGPT") {
+          const key = normalize2faKey(acc2fa ? acc2fa.value : "");
+          if (key === null) {
+            showMessageAccs("The 2FA secret does not look like a TOTP key (base32 letters A-Z and 2-7, or an otpauth:// link).", "error");
+            showSpinnerAccs(false);
+            addAccBtn.disabled = false;
+            return;
+          }
           url = "/functions/v1/addgptacc";
           payload = { email: emailValue, pass: passValue };
+          if (key) payload.two_factor_key = key;
         } else {
           url = "/functions/v1/addnfacc";
           payload = { email: emailValue, pass: passValue };
@@ -836,11 +836,20 @@ window.Accounts = (() => {
             body: JSON.stringify(payload)
           });
 
-          const data = await response.json();
-          if (!response.ok || data.error) throw new Error(data.error || "Unknown error");
+          const raw = await response.text();
+          let data = {};
+          try { data = raw ? JSON.parse(raw) : {}; } catch { data = { error: raw }; }
+          if (!response.ok || data.error) throw new Error(data.error || raw || `HTTP ${response.status}`);
 
-          showMessageAccs("Account added successfully!", "success");
+          // addgptacc never overwrites an existing account (uses/pass/status stay): say so instead of "added"
+          const dups = Array.isArray(data.duplicates) ? data.duplicates : (Array.isArray(data.skipped) ? data.skipped : []);
+          if (serviceValue === "chatGPT" && dups.length) {
+            showMessageAccs(`Already exists, not changed: ${dups.map(d => (typeof d === "string" ? d : d?.email || "")).filter(Boolean).join(", ") || emailValue}`, "error");
+          } else {
+            showMessageAccs("Account added successfully!", "success");
+          }
           addAccForm.reset();
+          toggleAnghamiLinks();
           fetchAccountsOrIssues(accountsViewSelector.value);
         } catch (err) {
           showMessageAccs(`Error: ${err.message}`, "error");
@@ -904,6 +913,22 @@ window.Accounts = (() => {
               btn.innerHTML = `<i class="fa-regular fa-copy"></i>`;
             }, 1800);
           }
+          return;
+        }
+
+        // Free-text status (anything except "active" takes the account out of stock)
+        if (btn.classList.contains("acc-status-custom")) {
+          const email = btn.dataset.email;
+          const current = btn.closest("tr")?.dataset.status || "";
+          const typed = prompt(
+            `Status for ${email}\n\nOnly "active" is sold and used for replacements. Anything else (e.g. review, banned, "2FA lost") takes it out of stock; its customers keep their links.`,
+            current
+          );
+          if (typed === null) return;
+          const next = typed.trim();
+          if (!next) return showMessageAccs("Status cannot be empty.", "error");
+          if (next === current) return;
+          await setAccountStatus(email, next, btn);
           return;
         }
 

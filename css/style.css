@@ -1614,3 +1614,69 @@ tr.ang-row-expired td:first-child {
     justify-content: center;
   }
 }
+
+/* ChatGPT account status (gpt_accs.status): only "active" is in stock */
+.acc-status-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.acc-status-badge.inactive {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.45);
+}
+.acc-status-btn.current {
+  opacity: 0.45;
+  cursor: default;
+}
+.acc-status-btn.acc-status-active:not(.current) {
+  background: rgba(34, 197, 94, 0.12) !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
+  color: #bbf7d0 !important;
+}
+.acc-status-btn.acc-status-active .hold-progress { background: rgba(34, 197, 94, 0.35) !important; }
+.acc-status-btn.acc-status-banned:not(.current) {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #fecaca !important;
+}
+.acc-status-btn.acc-status-banned .hold-progress { background: rgba(239, 68, 68, 0.35) !important; }
+
+/* Replace GPT modal: subs whose account is not active */
+#reactivate-status-list { margin-bottom: 12px; text-align: left; }
+.gpt-acct-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.07);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-size: 0.82rem;
+}
+.gpt-acct-alert .acc-status-badge { margin-left: 0; }
+.gpt-acct-alert-text { flex: 1; min-width: 160px; color: var(--text-main, #f8fafc); word-break: break-all; }
+.gpt-acct-alert .gpt-quick-replace-btn {
+  padding: 8px 14px;
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fecaca;
+}
+.gpt-acct-alert .gpt-quick-replace-btn:hover:not(:disabled) { background: rgba(239, 68, 68, 0.28); color: #fff; }
+.gpt-acct-alert .gpt-quick-replace-btn:disabled { opacity: 0.55; cursor: default; }

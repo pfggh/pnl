@@ -946,11 +946,168 @@ window.Subscriptions = (() => {
     const reactBtn = document.getElementById("reactivate-btn");
     const reactMsg = document.getElementById("reactivate-msg");
 
+    const statusList = document.getElementById("reactivate-status-list");
+
+    const escHtml = (v) => String(v ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    // replace_gpt search rows carry account_status (gpt_accs.status). Only exactly "active" is in use;
+    // anything else = the customer should be moved to an active account. "" = active or unknown.
+    const badAccountStatus = (s) => {
+      const st = String(s?.account_status ?? "").trim();
+      return st && st !== "active" ? st : "";
+    };
+    const isExpiredSub = (s) => s?.is_active === false || !!s?.is_expired;
+
+    const fallbackCopy = (text) => {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        showMessage("Copied message to clipboard!", "success");
+      } catch (err) {
+        console.error('Fallback copy failed', err);
+        showMessage("Failed to copy message", "error");
+      }
+      textArea.remove();
+    };
+
+    const hideStatusList = () => {
+      if (!statusList) return;
+      statusList.style.display = "none";
+      statusList.innerHTML = "";
+    };
+
+    // Red "account <status>" rows with a one-click Replace for the subs on a non-active account
+    const renderStatusList = () => {
+      if (!statusList) return;
+      const rows = lastSubList.map((s, idx) => ({ s, idx, bad: badAccountStatus(s) })).filter(r => r.bad);
+      if (!rows.length) return hideStatusList();
+      statusList.innerHTML = rows.map(({ s, idx, bad }) => {
+        const exp = s.expiry ? formatCompactDate(s.expiry) : "No expiry";
+        const subId = s.sub_id || s.id;
+        const expired = isExpiredSub(s);
+        return `
+          <div class="gpt-acct-alert">
+            <span class="acc-status-badge inactive" title="This account is not active: it is never sold or used for replacements">account ${escHtml(bad)}</span>
+            <span class="gpt-acct-alert-text">${subId ? `#${escHtml(subId)} — ` : ""}${escHtml(s.accemail)} (Exp: ${escHtml(exp)})</span>
+            ${expired
+              ? `<span style="color:#f59e0b; font-size:0.78rem;">Expired: renew first</span>`
+              : `<button type="button" class="pill-btn gpt-quick-replace-btn" data-idx="${idx}" title="Move this customer to an active account (asks first). The portal link stays the same."><i class="fa-solid fa-rotate"></i> Replace</button>`}
+          </div>`;
+      }).join("");
+      statusList.style.display = "block";
+      statusList.querySelectorAll(".gpt-quick-replace-btn").forEach(btn => {
+        btn.onclick = () => {
+          const sub = lastSubList[Number(btn.dataset.idx)];
+          if (!sub) return;
+          const subId = sub.sub_id || sub.id;
+          const bad = badAccountStatus(sub);
+          if (!confirm(`Replace ChatGPT #${subId} (${sub.accemail})?\n\nIts account is "${bad}". The customer is moved to a fresh active account. Their portal link stays the same.\n\nThis cannot be undone.`)) return;
+          subSelect.value = String(btn.dataset.idx);
+          runReplace(sub, btn);
+        };
+      });
+    };
+
+    // Calls replace_gpt for one sub and shows the (unchanged) portal link + the message to send
+    const runReplace = async (sub, triggerBtn) => {
+      const sub_id = sub && (sub.sub_id || sub.id);
+      if (!sub_id) {
+        reactMsg.innerHTML = `<span style="color:#ef4444;">Something is wrong with this result. Search by the customer's phone number again.</span>`;
+        return;
+      }
+
+      const buttons = [reactBtn, ...(statusList ? statusList.querySelectorAll(".gpt-quick-replace-btn") : [])];
+      const oldTrigger = triggerBtn.innerHTML;
+      buttons.forEach(b => { b.disabled = true; });
+      triggerBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i> Replacing...`;
+      reactMsg.innerHTML = "";
+
+      try {
+        const res = await fetch(`${window.SUPABASE_URL}/functions/v1/replace_gpt`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${window.authToken}`
+          },
+          body: JSON.stringify({ sub_id })
+        });
+
+        if (!res.ok) {
+          // 404 / 409 = no active account with a free seat (or nothing fresh for this customer): JSON with the reason
+          const errorText = await res.text();
+          let parsedError = errorText;
+          try {
+            const errObj = JSON.parse(errorText);
+            if (errObj && (errObj.error || errObj.message)) parsedError = errObj.error || errObj.message;
+          } catch (_) {}
+          throw new Error(parsedError || `HTTP Error ${res.status}`);
+        }
+
+        const result = await res.json();
+        if (result.error) throw new Error(result.error);
+
+        subSelect.style.display = "none";
+        reactBtn.style.display = "none";
+        hideStatusList();
+
+        const searchContainer = document.getElementById("gpt-search-container");
+        if (searchContainer) searchContainer.style.display = "none";
+        const subTitle = document.getElementById("gpt-replace-sub-title");
+        if (subTitle) subTitle.style.display = "none";
+
+        const link = result.link || "";
+        const textToCopy = result.message || link || "";
+        reactMsg.innerHTML = `
+          <div style="margin-top: 10px; text-align: left; font-size: 0.82rem; color: var(--text-muted);">
+            #${escHtml(sub_id)} moved to an active account. Portal link (unchanged):
+            <div style="margin-top: 4px; font-family: monospace; color: #f8fafc; word-break: break-all;">${escHtml(link) || "—"}</div>
+          </div>
+          <div style="margin-top: 10px; background: rgba(15, 23, 42, 0.6); padding: 15px; border-radius: 12px; border: 1px solid var(--border); text-align: left; white-space: pre-wrap; font-family: monospace; font-size: 0.9rem; color: #f8fafc; margin-bottom: 15px;">${escHtml(result.message || "")}</div>
+          <div style="margin-top: 10px;">
+            <button id="copy-replace-link-btn" class="copy-btn" style="width: 100%; justify-content: center; font-weight: 700; gap: 8px; padding: 12px 18px; border-radius: 12px; background: var(--primary); color: #fff; border: none; cursor: pointer;">
+              <i class="fa-regular fa-copy" style="pointer-events: none;"></i> Copy Message
+            </button>
+          </div>
+        `;
+
+        const copyBtn = document.getElementById("copy-replace-link-btn");
+        if (copyBtn) {
+          copyBtn.onclick = (e) => {
+            if (e) e.stopPropagation();
+            if (navigator.clipboard && window.isSecureContext) {
+              navigator.clipboard.writeText(textToCopy).then(() => {
+                showMessage("Copied message to clipboard!", "success");
+              }).catch(() => {
+                fallbackCopy(textToCopy);
+              });
+            } else {
+              fallbackCopy(textToCopy);
+            }
+          };
+        }
+      } catch (err) {
+        console.error(err);
+        reactMsg.innerHTML = `<span style="color:#ef4444;">Error: ${escHtml(err.message)}</span>`;
+      } finally {
+        buttons.forEach(b => { b.disabled = false; });
+        triggerBtn.innerHTML = oldTrigger;
+      }
+    };
+
     let lastSubList = [];
     if (searchBtn && searchInput && subSelect && reactBtn && reactMsg) {
       searchBtn.onclick = async () => {
         subSelect.style.display = "none";
         reactBtn.style.display = "none";
+        hideStatusList();
         reactMsg.innerHTML = "";
         const phone = searchInput.value.trim().replace(/\s+/g, "");
         if (!phone) {
@@ -983,131 +1140,32 @@ window.Subscriptions = (() => {
 
           subSelect.innerHTML = lastSubList.map((s, idx) => {
             const exp = s.expiry ? formatCompactDate(s.expiry) : "No expiry";
-            const expiredTag = (s.is_active === false || s.is_expired) ? " [EXPIRED – renew first]" : "";
+            const expiredTag = isExpiredSub(s) ? " [EXPIRED – renew first]" : "";
+            const bad = badAccountStatus(s);
+            const badTag = bad ? ` [ACCOUNT ${bad.toUpperCase()}]` : "";
             const subIdPrefix = (s.sub_id || s.id) ? `#${s.sub_id || s.id} — ` : "";
-            return `<option value="${idx}">${subIdPrefix}${s.accemail} (Exp: ${exp})${expiredTag}</option>`;
+            return `<option value="${idx}">${escHtml(`${subIdPrefix}${s.accemail} (Exp: ${exp})${badTag}${expiredTag}`)}</option>`;
           }).join("");
+          // Preselect the first live sub that sits on a non-active account
+          const firstBad = lastSubList.findIndex(s => badAccountStatus(s) && !isExpiredSub(s));
+          if (firstBad >= 0) subSelect.value = String(firstBad);
 
+          renderStatusList();
           subSelect.style.display = "inline-block";
           reactBtn.style.display = "inline-block";
         } catch (err) {
           console.error(err);
-          reactMsg.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}</span>`;
+          reactMsg.innerHTML = `<span style="color:#ef4444;">Error: ${escHtml(err.message)}</span>`;
         } finally {
           searchBtn.disabled = false;
           searchBtn.innerHTML = oldText;
         }
       };
 
-      reactBtn.onclick = async () => {
+      reactBtn.onclick = () => {
         const selectedIdx = subSelect.value;
         if (selectedIdx === "" || !lastSubList[selectedIdx]) return;
-        const sub_id = lastSubList[selectedIdx].sub_id || lastSubList[selectedIdx].id;
-        if (!sub_id) {
-          reactMsg.innerHTML = `<span style="color:#ef4444;">Something is wrong with this result. Search by the customer's phone number again.</span>`;
-          return;
-        }
-
-        reactBtn.disabled = true;
-        const oldBtnText = reactBtn.innerHTML;
-        reactBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="color:#fff"></i> Replacing...`;
-        reactMsg.innerHTML = "";
-
-        try {
-          const res = await fetch(`${window.SUPABASE_URL}/functions/v1/replace_gpt`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${window.authToken}`
-            },
-            body: JSON.stringify({ sub_id })
-          });
-
-          if (!res.ok) {
-            const errorText = await res.text();
-            let parsedError = errorText;
-            try {
-              const errObj = JSON.parse(errorText);
-              if (errObj && errObj.error) parsedError = errObj.error;
-            } catch (_) {}
-            throw new Error(parsedError || `HTTP Error ${res.status}`);
-          }
-
-          const result = await res.json();
-          if (result.error) throw new Error(result.error);
-
-          let formattedExpiry = "N/A";
-          if (result.expiry) {
-            const expiryDate = new Date(result.expiry);
-            if (!isNaN(expiryDate.getTime())) {
-              formattedExpiry = expiryDate.toLocaleDateString('en-GB', {
-                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-              });
-            } else {
-              formattedExpiry = result.expiry;
-            }
-          }
-
-          subSelect.style.display = "none";
-          reactBtn.style.display = "none";
-
-          const searchContainer = document.getElementById("gpt-search-container");
-          if (searchContainer) searchContainer.style.display = "none";
-          const subTitle = document.getElementById("gpt-replace-sub-title");
-          if (subTitle) subTitle.style.display = "none";
-
-          reactMsg.innerHTML = `
-            <div style="margin-top: 10px; background: rgba(15, 23, 42, 0.6); padding: 15px; border-radius: 12px; border: 1px solid var(--border); text-align: left; white-space: pre-wrap; font-family: monospace; font-size: 0.9rem; color: #f8fafc; margin-bottom: 15px;">${result.message || ""}</div>
-            <div style="margin-top: 10px;">
-              <button id="copy-replace-link-btn" class="copy-btn" data-value="${result.message || result.link || ""}" style="width: 100%; justify-content: center; font-weight: 700; gap: 8px; padding: 12px 18px; border-radius: 12px; background: var(--primary); color: #fff; border: none; cursor: pointer;">
-                <i class="fa-regular fa-copy" style="pointer-events: none;"></i> Copy Message
-              </button>
-            </div>
-          `;
-
-          const copyBtn = document.getElementById("copy-replace-link-btn");
-          if (copyBtn) {
-            copyBtn.onclick = (e) => {
-              if (e) e.stopPropagation();
-              const textToCopy = result.message || result.link || "";
-              if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(textToCopy).then(() => {
-                  showMessage("Copied message to clipboard!", "success");
-                }).catch(() => {
-                  fallbackCopy(textToCopy);
-                });
-              } else {
-                fallbackCopy(textToCopy);
-              }
-            };
-            
-            const fallbackCopy = (text) => {
-              const textArea = document.createElement("textarea");
-              textArea.value = text;
-              textArea.style.position = "fixed";
-              textArea.style.left = "-999999px";
-              textArea.style.top = "-999999px";
-              document.body.appendChild(textArea);
-              textArea.focus();
-              textArea.select();
-              try {
-                document.execCommand('copy');
-                showMessage("Copied message to clipboard!", "success");
-              } catch (err) {
-                console.error('Fallback copy failed', err);
-                showMessage("Failed to copy message", "error");
-              }
-              textArea.remove();
-            };
-          }
-
-        } catch (err) {
-          console.error(err);
-          reactMsg.innerHTML = `<span style="color:#ef4444;">Error: ${err.message}</span>`;
-        } finally {
-          reactBtn.disabled = false;
-          reactBtn.innerHTML = oldBtnText;
-        }
+        runReplace(lastSubList[selectedIdx], reactBtn);
       };
     }
   });
@@ -2437,6 +2495,11 @@ password: ${newPass}
         }
         const reactBtn = document.getElementById("reactivate-btn");
         if (reactBtn) reactBtn.style.display = "none";
+        const statusList = document.getElementById("reactivate-status-list");
+        if (statusList) {
+          statusList.style.display = "none";
+          statusList.innerHTML = "";
+        }
         const reactMsg = document.getElementById("reactivate-msg");
         if (reactMsg) reactMsg.innerHTML = "";
         const searchContainer = document.getElementById("gpt-search-container");
