@@ -802,8 +802,8 @@ window.MessagingStats = (() => {
       const json = await res.json();
       console.log("BSB sync response:", json);
 
-      // Auto reload current stats
-      await loadStats(currentDate);
+      // No automatic recalculation: the stats are computed only when Calculate is pressed.
+      setCalcStatus("Synced. Press Calculate to see the new numbers.");
     } catch (err) {
       console.error("BSB sync trigger error:", err);
       alert("Sync failed: " + (err.message || String(err)));
@@ -816,9 +816,22 @@ window.MessagingStats = (() => {
     }
   }
 
+  function setCalcStatus(text) {
+    const el = document.getElementById("msg-calc-status");
+    if (el) el.textContent = text;
+  }
+
+  // Runs ONLY when the user presses Calculate (no polling, no automatic loads): the
+  // calculation reads a whole day of messages, so it must not run in the background.
+  let isCalculating = false;
   async function loadStats(dateStr = "", isSilent = false) {
+    if (isCalculating) return;
+    isCalculating = true;
     const loadingOverlay = document.getElementById("msg-stats-loading");
     if (loadingOverlay && !isSilent) loadingOverlay.style.display = "flex";
+    const calcBtn = document.getElementById("msg-refresh-btn");
+    if (calcBtn) calcBtn.disabled = true;
+    setCalcStatus("Calculating…");
 
     try {
       currentDate = dateStr;
@@ -835,29 +848,22 @@ window.MessagingStats = (() => {
       if (datePicker && data.date) {
         datePicker.value = data.date;
       }
+      const at = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      setCalcStatus(`Calculated at ${at} for ${data.date || dateStr || "today"}.`);
     } catch (err) {
       console.error("Error loading messaging stats:", err);
+      setCalcStatus("Calculation failed. Try again.");
     } finally {
       if (loadingOverlay && !isSilent) loadingOverlay.style.display = "none";
+      if (calcBtn) calcBtn.disabled = false;
+      isCalculating = false;
     }
   }
 
+  // Live polling was removed (2026-11-16): it recalculated the whole day every 20 s and was
+  // the largest load on the database. Kept as a no-op because main.js calls it.
   function startLivePolling() {
     stopLivePolling();
-    // Live poll stats every 20 seconds so graph is ALWAYS 100% in sync with real time
-    pollingTimer = setInterval(() => {
-      if (document.hidden) return;
-      const statsPage = document.getElementById("messaging-stats-page");
-      if (!statsPage || !statsPage.classList.contains("active")) return;
-
-      const datePicker = document.getElementById("msg-date-picker");
-      const todayStr = getBeirutTodayStr();
-      const isToday = !datePicker || !datePicker.value || datePicker.value === todayStr;
-
-      if (isToday) {
-        loadStats(currentDate, true); // silent background reload
-      }
-    }, 20000);
   }
 
   function stopLivePolling() {
@@ -868,13 +874,7 @@ window.MessagingStats = (() => {
   }
 
   function init() {
-    startLivePolling();
-
-    if (isInitialized) {
-      // If already initialized, just reload stats for current view
-      loadStats(currentDate);
-      return;
-    }
+    if (isInitialized) return; // keep what was calculated; nothing reloads by itself
     isInitialized = true;
 
     const datePicker = document.getElementById("msg-date-picker");
@@ -884,8 +884,8 @@ window.MessagingStats = (() => {
     const yesterdayQuickBtn = document.getElementById("msg-quick-yesterday");
 
     if (datePicker) {
-      datePicker.addEventListener("change", (e) => {
-        loadStats(e.target.value);
+      datePicker.addEventListener("change", () => {
+        setCalcStatus("Press Calculate for this day.");
       });
     }
 
@@ -906,7 +906,7 @@ window.MessagingStats = (() => {
       todayQuickBtn.addEventListener("click", () => {
         const today = getBeirutTodayStr();
         if (datePicker) datePicker.value = today;
-        loadStats(today);
+        setCalcStatus("Press Calculate for today.");
       });
     }
 
@@ -914,7 +914,7 @@ window.MessagingStats = (() => {
       yesterdayQuickBtn.addEventListener("click", () => {
         const yest = getBeirutYesterdayStr();
         if (datePicker) datePicker.value = yest;
-        loadStats(yest);
+        setCalcStatus("Press Calculate for yesterday.");
       });
     }
 
@@ -925,8 +925,6 @@ window.MessagingStats = (() => {
 
     // Modern Minute Graph Controls & Scroll Listeners
     setupMinuteGraphControls();
-
-    loadStats();
   }
 
   function setupMinuteGraphControls() {
