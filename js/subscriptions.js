@@ -1949,11 +1949,12 @@ user: ${it.user}`;
     }
     updateDurationOptions();
 
-    // CapCut is a fixed 1-month product: lock the duration field
+    // CapCut (1 month) and Gemini Plus (6 months) are fixed-length products: lock the duration field
+    const FIXED_MONTHS = { capcut: "1", gemini: "6" };
     const durationInput = document.getElementById("duration");
     if (durationInput) {
-      if (svc === "capcut") {
-        durationInput.value = "1";
+      if (FIXED_MONTHS[svc]) {
+        durationInput.value = FIXED_MONTHS[svc];
         durationInput.readOnly = true;
       } else if (durationInput.readOnly) {
         durationInput.value = "";
@@ -2218,8 +2219,8 @@ password: ${newPass}
         submitBtn.disabled = false;
         return;
       }
-      if (svc === "gemini" && ![3, 6, 12].includes(duration)) {
-        showMessage("Gemini duration must be 3, 6 or 12 months.", "error");
+      if (svc === "gemini" && duration !== 6) {
+        showMessage("Gemini Plus is sold for 6 months only.", "error");
         showSpinner(false);
         submitBtn.disabled = false;
         return;
